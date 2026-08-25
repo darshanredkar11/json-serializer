@@ -1,0 +1,74 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.jsonserializer</groupId>
+  <artifactId>json-serializer</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <name>json-serializer</name>
+  <description>JSON to/from native Java objects with no reflection, no annotations, no dependencies, and no intermediate tree. You write a small codec per type.</description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>17</maven.compiler.release>
+  </properties>
+
+  <!--
+    No runtime or test dependencies, on purpose — see README.md. The test
+    suite (JsonTest, ConcurrencyTest, Bench) is a plain `main()` runner, not
+    JUnit, so this stays true even with Maven packaging added on top of the
+    original `javac`-only build (`build.sh` still works unchanged).
+  -->
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+      </plugin>
+      <plugin>
+        <!-- Test classes have `main()` runners, not JUnit tests; skip
+             surefire's discovery (it would find nothing) and instead run
+             them explicitly as part of the build via exec-maven-plugin. -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.3.1</version>
+        <configuration>
+          <skipTests>true</skipTests>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.4.0</version>
+        <executions>
+          <execution>
+            <id>run-json-test</id>
+            <phase>test</phase>
+            <goals><goal>java</goal></goals>
+            <configuration>
+              <mainClass>json.JsonTest</mainClass>
+              <classpathScope>test</classpathScope>
+              <!-- JsonTest.main() calls System.exit(1) on failure; fork so
+                   that only kills this test's JVM, not Maven's own. -->
+              <fork>true</fork>
+            </configuration>
+          </execution>
+          <execution>
+            <id>run-concurrency-test</id>
+            <phase>test</phase>
+            <goals><goal>java</goal></goals>
+            <configuration>
+              <mainClass>json.ConcurrencyTest</mainClass>
+              <classpathScope>test</classpathScope>
+              <fork>true</fork>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
