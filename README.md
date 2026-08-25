@@ -87,6 +87,8 @@ decode         265 ns/op    3.8 M records/s     820 MB/s
 Throughput holds flat on a 218 KB / 1000-record array, i.e. it is not buffer-growth
 bound.
 
+Independently cross-checked from a consuming project (`cpurest-java`, which uses this library instead of Jackson): an isolated, controlled Jackson-vs-json-serializer comparison on this same `User` shape measured 202.6/313.3 ns/op (encode/decode) for json-serializer against 399.3/587.4 ns/op for Jackson — 2.0×/1.9× faster, different machine state, same order of magnitude as the numbers above.
+
 ## Behaviour worth knowing
 
 - **Unknown fields** are skipped by a byte scan (`skipValue`), never materialised.
