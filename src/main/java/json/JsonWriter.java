@@ -91,6 +91,22 @@ public final class JsonWriter {
         return this;
     }
 
+    /**
+     * Writes a field name that isn't known ahead of time — e.g. a map's
+     * runtime keys — so there's nothing to pre-encode into a {@link JsonField}.
+     * Costs a per-call escape and copy instead of {@code JsonField}'s
+     * one-time encoding; prefer a {@code JsonField} constant whenever the
+     * key is fixed at compile time.
+     */
+    public JsonWriter name(String key) {
+        ensure(2);
+        if (comma) buf[pos++] = ',';
+        comma = false;
+        rawString(key);
+        rawByte((byte) ':');
+        return this;
+    }
+
     // -------------------------------------------------------------- values
 
     public JsonWriter value(String v) {

@@ -86,8 +86,79 @@ public final class JsonReader {
             && Arrays.equals(buf, keyStart, keyEnd, name, 0, name.length);
     }
 
-    /** The current key as a {@code String}. Allocates; for errors and dynamic use. */
-    public String key() { return new String(buf, keyStart, keyEnd - keyStart, StandardCharsets.UTF_8); }
+    /**
+     * The current key as a {@code String}, with any escapes decoded.
+     * Allocates; for errors and dynamic use (e.g. a {@code Map}'s runtime
+     * keys — see {@link Codecs#mapOf}). {@link #keyIs} is the free
+     * alternative when matching against a known, escape-free
+     * {@link JsonField} constant, which covers the overwhelming majority of
+     * fixed-schema field names.
+     */
+    public String key() {
+        for (int i = keyStart; i < keyEnd; i++) {
+            byte b = buf[i];
+            if (b == '\\' || b < 0) {
+                return decodeKeyEscaped();
+            }
+        }
+        // Fast path: pure ASCII, no escapes — the overwhelming majority of keys.
+        return new String(buf, keyStart, keyEnd - keyStart, StandardCharsets.ISO_8859_1);
+    }
+
+    /**
+     * Decodes {@code [keyStart, keyEnd)} with escapes and multi-byte UTF-8
+     * resolved. Deliberately separate from {@link #slowString}, which
+     * searches for its own terminating quote and advances {@code pos} —
+     * a key's bounds are already known from {@link #nextKey}, so this just
+     * walks a fixed range instead, without touching that hot, well-tested
+     * string-value path.
+     */
+    private String decodeKeyEscaped() {
+        int start = keyStart;
+        int limit = keyEnd;
+        char[] out = chars;
+        if (out.length < (limit - start) + 16) out = chars = new char[Math.max((limit - start) * 2 + 16, 64)];
+        byte[] b = buf;
+        int p = start;
+        int n = 0;
+        while (p < limit) {
+            int x = b[p++] & 0xFF;
+            if (x == '\\') {
+                if (p >= limit) throw error("truncated escape in key");
+                int esc = b[p++];
+                switch (esc) {
+                    case '"': out[n++] = '"'; break;
+                    case '\\': out[n++] = '\\'; break;
+                    case '/': out[n++] = '/'; break;
+                    case 'b': out[n++] = '\b'; break;
+                    case 'f': out[n++] = '\f'; break;
+                    case 'n': out[n++] = '\n'; break;
+                    case 'r': out[n++] = '\r'; break;
+                    case 't': out[n++] = '\t'; break;
+                    case 'u':
+                        if (p + 4 > limit) throw error("truncated \\u escape in key");
+                        out[n++] = (char) ((hex(b[p]) << 12) | (hex(b[p + 1]) << 8) | (hex(b[p + 2]) << 4) | hex(b[p + 3]));
+                        p += 4;
+                        break;
+                    default: throw error("invalid escape '\\" + (char) esc + "' in key");
+                }
+            } else if (x < 0x80) {
+                out[n++] = (char) x;
+            } else if (x < 0xE0) {
+                out[n++] = (char) (((x & 0x1F) << 6) | (b[p++] & 0x3F));
+            } else if (x < 0xF0) {
+                out[n++] = (char) (((x & 0x0F) << 12) | ((b[p] & 0x3F) << 6) | (b[p + 1] & 0x3F));
+                p += 2;
+            } else {
+                int cp = ((x & 0x07) << 18) | ((b[p] & 0x3F) << 12) | ((b[p + 1] & 0x3F) << 6) | (b[p + 2] & 0x3F);
+                p += 3;
+                cp -= 0x10000;
+                out[n++] = (char) (0xD800 + (cp >> 10));
+                out[n++] = (char) (0xDC00 + (cp & 0x3FF));
+            }
+        }
+        return new String(out, 0, n);
+    }
 
     /**
      * Advances to the next array element and returns {@code false} at the

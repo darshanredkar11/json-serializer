@@ -6,6 +6,7 @@ rm -rf out
 mkdir -p out
 javac -Xlint:all -d out $(find src -name '*.java')
 java -cp out json.JsonTest
+java -cp out json.CodecsTest
 java -cp out json.ConcurrencyTest
 [ "$1" = "bench" ] && java -cp out json.Bench
 exit 0

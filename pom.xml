@@ -17,9 +17,9 @@
 
   <!--
     No runtime or test dependencies, on purpose — see README.md. The test
-    suite (JsonTest, ConcurrencyTest, Bench) is a plain `main()` runner, not
-    JUnit, so this stays true even with Maven packaging added on top of the
-    original `javac`-only build (`build.sh` still works unchanged).
+    suite (JsonTest, CodecsTest, ConcurrencyTest, Bench) is a plain `main()`
+    runner, not JUnit, so this stays true even with Maven packaging added on
+    top of the original `javac`-only build (`build.sh` still works unchanged).
   -->
 
   <build>
@@ -54,6 +54,16 @@
               <classpathScope>test</classpathScope>
               <!-- JsonTest.main() calls System.exit(1) on failure; fork so
                    that only kills this test's JVM, not Maven's own. -->
+              <fork>true</fork>
+            </configuration>
+          </execution>
+          <execution>
+            <id>run-codecs-test</id>
+            <phase>test</phase>
+            <goals><goal>java</goal></goals>
+            <configuration>
+              <mainClass>json.CodecsTest</mainClass>
+              <classpathScope>test</classpathScope>
               <fork>true</fork>
             </configuration>
           </execution>

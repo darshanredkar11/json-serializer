@@ -62,6 +62,31 @@ only the objects you actually asked for. For full control, use `new JsonWriter()
 See [`User.java`](src/main/java/json/example/User.java) for nested objects,
 arrays, nulls, and unknown-field handling.
 
+## Combinators
+
+Writing every array, nullable field, map, and enum by hand in each codec gets
+old fast. `Codecs` has the common ones ready-made — still no reflection, each
+one just a thin wrapper over the same `JsonWriter`/`JsonReader` calls you'd
+write yourself:
+
+```java
+private static final JsonCodec<List<String>> TAGS   = Codecs.listOf(Codecs.STRING);
+private static final JsonCodec<String> REASON        = Codecs.nullable(Codecs.STRING);
+private static final JsonCodec<Map<String, Integer>> SCORES = Codecs.mapOf(Codecs.INT);
+private static final JsonCodec<Status> STATUS        = Codecs.enumOf(Status.class);
+```
+
+They compose: `Codecs.nullable(Codecs.listOf(Codecs.enumOf(Status.class)))` is
+a `JsonCodec<List<Status>>` that also accepts a JSON `null`. `Codecs.STRING`,
+`BOOLEAN`, `INT`, `LONG`, `DOUBLE` exist mainly to be element/value types for
+`listOf`/`mapOf`/`nullable`, though nothing stops you from using them
+directly. `mapOf`'s keys aren't known ahead of time, so — unlike everything
+else here — encoding one costs a per-call escape rather than a `JsonField`'s
+one-time encoding; reading one goes through `JsonReader.key()`, which fully
+decodes escapes (unlike `keyIs()`, which compares raw bytes against a known,
+escape-free `JsonField` and is what you want for ordinary fixed-schema
+fields).
+
 ## Why it's fast
 
 | | |
@@ -123,15 +148,17 @@ Independently cross-checked from a consuming project (`cpurest-java`, which uses
 src/main/java/json/
   Json.java             one-line entry points, thread-local buffers, reentrancy guard
   JsonCodec.java        the interface you implement
-  JsonField.java        a field name, encoded once
-  JsonWriter.java       UTF-8 byte-buffer writer
-  JsonReader.java       in-place pull parser
+  Codecs.java           ready-made combinators: nullable, listOf, mapOf, enumOf, primitives
+  JsonField.java         a field name, encoded once
+  JsonWriter.java        UTF-8 byte-buffer writer
+  JsonReader.java        in-place pull parser
   JsonException.java
-  example/User.java     worked example
+  example/User.java      worked example
 src/test/java/json/
-  JsonTest.java         97 checks, no test framework
-  ConcurrencyTest.java  concurrent round trips + reentrancy-guard checks
-  Bench.java            throughput benchmark
+  JsonTest.java          97 checks, no test framework
+  CodecsTest.java        combinator checks (nullable, listOf, mapOf, enumOf, composed)
+  ConcurrencyTest.java   concurrent round trips + reentrancy-guard checks
+  Bench.java             throughput benchmark
 ```
 
 No dependencies — copy the `json` package into any project, or point `javac`
