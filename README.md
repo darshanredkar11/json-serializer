@@ -1,8 +1,10 @@
 # json-serializer
 
-JSON ↔ native Java objects with no reflection, no annotations, no dependencies,
-and no intermediate tree. You write a small codec per type; it compiles down to
-plain field access over a byte buffer.
+JSON ↔ native Java objects with no reflection, no dependencies, and no
+intermediate tree. Write a small codec per type by hand, or annotate a
+record with `@JsonRecord` and let a compile-time processor generate the
+same code for you — either way, there is no reflection at runtime, ever;
+the processor only exists at compile time and never ships in your classes.
 
 Five source files, ~700 lines, plain `javac`.
 
@@ -87,6 +89,75 @@ decodes escapes (unlike `keyIs()`, which compares raw bytes against a known,
 escape-free `JsonField` and is what you want for ordinary fixed-schema
 fields).
 
+## Code generation
+
+Hand-writing a codec is still the ground truth, but you don't have to type
+it yourself. Annotate a record and a compile-time processor (bundled in
+this same jar, auto-discovered via `META-INF/services` on `javac`'s
+annotation processor path) generates a `<Type>Codec` class next to it —
+structurally the exact same code you'd write by hand, not a generic
+reflective mapper:
+
+```java
+@JsonRecord
+public record TaxResponse(@JsonName("tax_owed") double taxOwed,
+                           @JsonName("effective_rate") double effectiveRate) {}
+
+// generates TaxResponseCodec in the same package:
+byte[] bytes = Json.toBytes(TaxResponseCodec.CODEC, response);
+```
+
+The wire name for a component defaults to its Java name, verbatim — no
+guessed camelCase-to-snake_case conversion, matching this library's stance
+that naming should be explicit (see "Combinators" above for why `mapOf`
+works the same way). `@JsonName` is the escape hatch for the cases that
+need something else, e.g. matching a Rust `serde` struct's snake_case
+fields.
+
+Supported component types: `int`, `long`, `double`, `boolean`, `String`,
+an enum, a `List<T>` of any supported type (nested lists included), or
+another type that is either itself `@JsonRecord`-annotated or exposes its
+own hand-written `CODEC` field. Every reference-typed component is treated
+as nullable automatically — no `@Nullable` annotation needed, no cost
+beyond the one branch a hand-written codec would have anyway. `Map` isn't
+auto-supported (there's no single obvious codec for two type parameters);
+the processor tells you so directly, at the record, with a `Codecs.mapOf`
+pointer, rather than leaving you to decode a "cannot find symbol" error in
+generated code you never asked to look at.
+
+Generated classes can't get a `CODEC` field injected into your original
+type — a standard annotation processor can only emit new files, never
+modify the one it was triggered by — so the generated field lives on the
+sibling `<Type>Codec` class instead. If you're bridging this into your own
+reflective dispatch layer the way `Wire` in `cpurest-java` does, look for
+both conventions: a `CODEC` field directly on the type, then a `<Type>Codec`
+sibling class, in that order.
+
+**Maven**: implicit annotation-processor discovery from the plain compile
+classpath is unreliable under Maven's default in-process compilation (a
+long-standing Maven quirk that affects every JVM annotation processor, not
+something specific to this one — Lombok, MapStruct, and Dagger all document
+the identical workaround). Declare the processor path explicitly:
+
+```xml
+<plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-compiler-plugin</artifactId>
+  <configuration>
+    <annotationProcessorPaths>
+      <path>
+        <groupId>com.jsonserializer</groupId>
+        <artifactId>json-serializer</artifactId>
+        <version>1.0.0</version>
+      </path>
+    </annotationProcessorPaths>
+  </configuration>
+</plugin>
+```
+
+Gradle and a plain `javac` invocation both pick the processor up from the
+ordinary compile classpath with no extra configuration.
+
 ## Why it's fast
 
 | | |
@@ -146,23 +217,31 @@ Independently cross-checked from a consuming project (`cpurest-java`, which uses
 
 ```
 src/main/java/json/
-  Json.java             one-line entry points, thread-local buffers, reentrancy guard
-  JsonCodec.java        the interface you implement
-  Codecs.java           ready-made combinators: nullable, listOf, mapOf, enumOf, primitives
-  JsonField.java         a field name, encoded once
-  JsonWriter.java        UTF-8 byte-buffer writer
-  JsonReader.java        in-place pull parser
+  Json.java                        one-line entry points, thread-local buffers, reentrancy guard
+  JsonCodec.java                   the interface you implement (or generate)
+  Codecs.java                      ready-made combinators: nullable, listOf, mapOf, enumOf, primitives
+  JsonRecord.java, JsonName.java   the two annotations code generation looks for
+  JsonField.java                   a field name, encoded once
+  JsonWriter.java                  UTF-8 byte-buffer writer
+  JsonReader.java                  in-place pull parser
   JsonException.java
-  example/User.java      worked example
+  processor/JsonRecordProcessor.java  generates <Type>Codec from an @JsonRecord
+  example/User.java                worked example
+src/main/resources/META-INF/services/
+  javax.annotation.processing.Processor  SPI registration for JsonRecordProcessor
 src/test/java/json/
-  JsonTest.java          97 checks, no test framework
-  CodecsTest.java        combinator checks (nullable, listOf, mapOf, enumOf, composed)
-  ConcurrencyTest.java   concurrent round trips + reentrancy-guard checks
-  Bench.java             throughput benchmark
+  JsonTest.java                    97 checks, no test framework
+  CodecsTest.java                  combinator checks (nullable, listOf, mapOf, enumOf, composed)
+  ConcurrencyTest.java             concurrent round trips + reentrancy-guard checks
+  processor/JsonRecordProcessorTest.java  compiles and runs real @JsonRecord sources via javac in-process
+  Bench.java                       throughput benchmark
 ```
 
-No dependencies — copy the `json` package into any project, or point `javac`
-at it (`./build.sh`). A `pom.xml` is also provided for projects that want it
-as a proper Maven artifact (`mvn install`); it doesn't add any dependency of
-its own — the test classes are `main()` runners invoked via `exec-maven-plugin`
-during `mvn test`, not JUnit.
+No required dependencies — copy the `json` package into any project, or
+point `javac` at it (`./build.sh`). A `pom.xml` is also provided for
+projects that want it as a proper Maven artifact (`mvn install`); it
+doesn't add any runtime dependency of its own — the hand-test classes are
+`main()` runners invoked via `exec-maven-plugin` during `mvn test`, not
+JUnit, and the annotation processor's own dependencies
+(`javax.annotation.processing`, `javax.lang.model`) are part of the JDK,
+not an external library.

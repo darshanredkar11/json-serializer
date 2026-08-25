@@ -28,6 +28,18 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.13.0</version>
+        <configuration>
+          <!-- This module never needs to self-process: JsonRecordProcessor
+               is a bundled processor for *consumers*, not for anything in
+               this source tree. Disabling annotation processing here also
+               sidesteps a real bootstrapping hazard — process-resources
+               copies META-INF/services/javax.annotation.processing.Processor
+               into target/classes before compile runs, which could make
+               javac try to load JsonRecordProcessor as a processor while
+               its own .java source is still mid-compilation in this exact
+               invocation. -->
+          <proc>none</proc>
+        </configuration>
       </plugin>
       <plugin>
         <!-- Test classes have `main()` runners, not JUnit tests; skip
@@ -63,6 +75,16 @@
             <goals><goal>java</goal></goals>
             <configuration>
               <mainClass>json.CodecsTest</mainClass>
+              <classpathScope>test</classpathScope>
+              <fork>true</fork>
+            </configuration>
+          </execution>
+          <execution>
+            <id>run-json-record-processor-test</id>
+            <phase>test</phase>
+            <goals><goal>java</goal></goals>
+            <configuration>
+              <mainClass>json.processor.JsonRecordProcessorTest</mainClass>
               <classpathScope>test</classpathScope>
               <fork>true</fork>
             </configuration>

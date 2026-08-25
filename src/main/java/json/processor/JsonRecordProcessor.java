@@ -1,0 +1,287 @@
+package json.processor;
+
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Filer;
+import javax.annotation.processing.Messager;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedAnnotationTypes;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.RecordComponentElement;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
+import javax.tools.Diagnostic;
+import javax.tools.JavaFileObject;
+import java.io.IOException;
+import java.io.Writer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Generates a {@code <Type>Codec} class for every {@code @JsonRecord}
+ * record, structurally identical to a hand-written {@code json.JsonCodec}
+ * — see {@link json.JsonRecord}'s javadoc for the full contract. Registered
+ * via {@code META-INF/services/javax.annotation.processing.Processor} so
+ * any project with json-serializer on its compile classpath picks this up
+ * automatically; nothing to configure.
+ */
+@SupportedAnnotationTypes("json.JsonRecord")
+public final class JsonRecordProcessor extends AbstractProcessor {
+
+    private Types types;
+    private Elements elements;
+    private Messager messager;
+    private Filer filer;
+    private TypeMirror stringType;
+    private TypeMirror listErasure;
+    private TypeMirror mapErasure;
+    private TypeMirror collectionErasure;
+
+    @Override
+    public synchronized void init(ProcessingEnvironment env) {
+        super.init(env);
+        this.types = env.getTypeUtils();
+        this.elements = env.getElementUtils();
+        this.messager = env.getMessager();
+        this.filer = env.getFiler();
+        this.stringType = elements.getTypeElement("java.lang.String").asType();
+        this.listErasure = types.erasure(elements.getTypeElement("java.util.List").asType());
+        this.mapErasure = types.erasure(elements.getTypeElement("java.util.Map").asType());
+        this.collectionErasure = types.erasure(elements.getTypeElement("java.util.Collection").asType());
+    }
+
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+        return SourceVersion.latestSupported();
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        for (Element element : roundEnv.getElementsAnnotatedWith(json.JsonRecord.class)) {
+            if (element.getKind() != ElementKind.RECORD) {
+                messager.printMessage(Diagnostic.Kind.ERROR, "@JsonRecord can only be applied to a record", element);
+                continue;
+            }
+            try {
+                generate((TypeElement) element);
+            } catch (UnsupportedFieldException e) {
+                messager.printMessage(Diagnostic.Kind.ERROR,
+                        "@JsonRecord: " + e.getMessage(), e.element);
+            } catch (IOException e) {
+                messager.printMessage(Diagnostic.Kind.ERROR,
+                        "@JsonRecord: failed to write generated codec: " + e.getMessage(), element);
+            }
+        }
+        return true;
+    }
+
+    // ------------------------------------------------------------------ generation
+
+    private void generate(TypeElement record) throws IOException {
+        String packageName = elements.getPackageOf(record).getQualifiedName().toString();
+        String simpleName = record.getSimpleName().toString();
+        String codecClassName = simpleName + "Codec";
+        String qualifiedCodecName = packageName.isEmpty() ? codecClassName : packageName + "." + codecClassName;
+        String recordType = record.getQualifiedName().toString();
+
+        List<FieldPlan> fields = new ArrayList<>();
+        for (RecordComponentElement component : record.getRecordComponents()) {
+            fields.add(planFor(component));
+        }
+
+        JavaFileObject file = filer.createSourceFile(qualifiedCodecName, record);
+        try (Writer out = file.openWriter()) {
+            out.write(render(packageName, codecClassName, recordType, simpleName, fields));
+        }
+    }
+
+    private String render(String packageName, String codecClassName, String recordType, String simpleName, List<FieldPlan> fields) {
+        StringBuilder sb = new StringBuilder();
+        if (!packageName.isEmpty()) {
+            sb.append("package ").append(packageName).append(";\n\n");
+        }
+        sb.append("import json.JsonCodec;\n");
+        sb.append("import json.JsonField;\n");
+        sb.append("import json.JsonReader;\n");
+        sb.append("import json.JsonWriter;\n\n");
+        sb.append("/** Generated by ").append(JsonRecordProcessor.class.getName())
+          .append(" from ").append(recordType).append(" — do not edit. */\n");
+        sb.append("@javax.annotation.processing.Generated(\"").append(JsonRecordProcessor.class.getName()).append("\")\n");
+        sb.append("public final class ").append(codecClassName).append(" {\n");
+        sb.append("    private ").append(codecClassName).append("() {}\n\n");
+
+        for (FieldPlan f : fields) {
+            sb.append("    private static final JsonField ").append(f.constantName)
+              .append(" = JsonField.of(\"").append(escapeJava(f.wireName)).append("\");\n");
+        }
+        sb.append("\n");
+        sb.append("    public static final JsonCodec<").append(recordType).append("> CODEC = new JsonCodec<").append(recordType).append(">() {\n");
+
+        sb.append("        @Override\n");
+        sb.append("        public void write(JsonWriter w, ").append(recordType).append(" value) {\n");
+        sb.append("            w.beginObject();\n");
+        for (FieldPlan f : fields) {
+            sb.append(f.writeStatement("            "));
+        }
+        sb.append("            w.endObject();\n");
+        sb.append("        }\n\n");
+
+        sb.append("        @Override\n");
+        sb.append("        public ").append(recordType).append(" read(JsonReader r) {\n");
+        for (FieldPlan f : fields) {
+            sb.append("            ").append(f.javaType).append(" ").append(f.localName).append(" = ").append(f.defaultValue).append(";\n");
+        }
+        sb.append("            r.beginObject();\n");
+        sb.append("            while (r.nextKey()) {\n");
+        for (int i = 0; i < fields.size(); i++) {
+            FieldPlan f = fields.get(i);
+            sb.append("                ").append(i == 0 ? "if" : "else if").append(" (r.keyIs(").append(f.constantName).append(")) ")
+              .append(f.readAssignment()).append("\n");
+        }
+        sb.append("                else r.skipValue();\n");
+        sb.append("            }\n");
+        sb.append("            return new ").append(simpleName).append("(");
+        for (int i = 0; i < fields.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(fields.get(i).localName);
+        }
+        sb.append(");\n");
+        sb.append("        }\n");
+        sb.append("    };\n");
+        sb.append("}\n");
+        return sb.toString();
+    }
+
+    // ------------------------------------------------------------------ per-field planning
+
+    private FieldPlan planFor(RecordComponentElement component) {
+        String javaName = component.getSimpleName().toString();
+        json.JsonName override = component.getAnnotation(json.JsonName.class);
+        String wireName = override != null ? override.value() : javaName;
+        String constantName = "F_" + javaName.toUpperCase(java.util.Locale.ROOT);
+        TypeMirror type = component.asType();
+
+        FieldPlan plan = new FieldPlan();
+        plan.javaName = javaName;
+        plan.localName = javaName;
+        plan.wireName = wireName;
+        plan.constantName = constantName;
+        plan.element = component;
+
+        switch (type.getKind()) {
+            case INT -> { plan.javaType = "int"; plan.defaultValue = "0"; plan.primitiveAccessor = "readInt"; }
+            case LONG -> { plan.javaType = "long"; plan.defaultValue = "0"; plan.primitiveAccessor = "readLong"; }
+            case DOUBLE -> { plan.javaType = "double"; plan.defaultValue = "0"; plan.primitiveAccessor = "readDouble"; }
+            case BOOLEAN -> { plan.javaType = "boolean"; plan.defaultValue = "false"; plan.primitiveAccessor = "readBoolean"; }
+            default -> {
+                plan.javaType = typeName(type);
+                plan.defaultValue = "null";
+                plan.nullable = true;
+                plan.codecExpr = codecExpressionFor(type, component);
+            }
+        }
+        return plan;
+    }
+
+    /** Resolves the Java expression for a JsonCodec<T> matching {@code type}, recursing into List<T> element types. */
+    private String codecExpressionFor(TypeMirror type, Element origin) {
+        if (types.isSameType(type, stringType)) {
+            return "json.Codecs.STRING";
+        }
+        if (type.getKind() == TypeKind.DECLARED) {
+            DeclaredType declared = (DeclaredType) type;
+            if (types.isSameType(types.erasure(declared), listErasure)) {
+                if (declared.getTypeArguments().size() != 1) {
+                    throw new UnsupportedFieldException(origin, "raw java.util.List is not supported — parameterize it, e.g. List<String>");
+                }
+                TypeMirror element = declared.getTypeArguments().get(0);
+                return "json.Codecs.listOf(" + codecExpressionFor(element, origin) + ")";
+            }
+            TypeElement typeElement = (TypeElement) declared.asElement();
+            if (typeElement.getKind() == ElementKind.ENUM) {
+                return "json.Codecs.enumOf(" + typeElement.getQualifiedName() + ".class)";
+            }
+            if (typeElement.getAnnotation(json.JsonRecord.class) != null) {
+                String pkg = elements.getPackageOf(typeElement).getQualifiedName().toString();
+                String codecName = typeElement.getSimpleName() + "Codec";
+                return (pkg.isEmpty() ? codecName : pkg + "." + codecName) + ".CODEC";
+            }
+            TypeMirror erasure = types.erasure(declared);
+            if (types.isAssignable(erasure, mapErasure)) {
+                throw new UnsupportedFieldException(origin,
+                        "Map isn't auto-supported (there's no single obvious element codec for two type "
+                                + "parameters) — write it by hand with json.Codecs.mapOf(<valueCodec>) as the "
+                                + "component's declared field type instead of using @JsonRecord for this field");
+            }
+            if (types.isAssignable(erasure, collectionErasure)) {
+                throw new UnsupportedFieldException(origin,
+                        "only java.util.List is auto-supported for collections, not " + typeElement.getQualifiedName()
+                                + " — use List<T>, or write this component's codec by hand with json.Codecs.listOf(...)");
+            }
+            // Assumed to expose its own hand-written `public static final JsonCodec<T> CODEC` —
+            // if it doesn't, the generated file fails to compile with a clear "cannot find
+            // symbol: CODEC" pointing at this exact line, which is an acceptable, standard
+            // failure mode for generated code referencing an undeclared convention.
+            return typeElement.getQualifiedName() + ".CODEC";
+        }
+        throw new UnsupportedFieldException(origin,
+                "unsupported component type " + type + " — supported: int, long, double, boolean, String, "
+                        + "an enum, a List<T> of a supported type, or a type with its own JsonCodec (via "
+                        + "@JsonRecord or a hand-written CODEC field)");
+    }
+
+    private String typeName(TypeMirror type) {
+        return type.toString();
+    }
+
+    private static String escapeJava(String s) {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    // ------------------------------------------------------------------ model
+
+    private static final class FieldPlan {
+        String javaName;
+        String localName;
+        String wireName;
+        String constantName;
+        String javaType;
+        String defaultValue;
+        String primitiveAccessor; // set for primitives; null for reference types
+        String codecExpr; // set for reference types; null for primitives
+        boolean nullable;
+        Element element;
+
+        String writeStatement(String indent) {
+            if (primitiveAccessor != null) {
+                return indent + "w.name(" + constantName + ").value(value." + javaName + "());\n";
+            }
+            return indent + "w.name(" + constantName + ");\n"
+                 + indent + "if (value." + javaName + "() == null) w.nullValue(); else " + codecExpr + ".write(w, value." + javaName + "());\n";
+        }
+
+        String readAssignment() {
+            if (primitiveAccessor != null) {
+                return localName + " = r." + primitiveAccessor + "();";
+            }
+            return localName + " = r.isNull() ? null : " + codecExpr + ".read(r);";
+        }
+    }
+
+    @SuppressWarnings("serial") // control flow within one processor run, never actually serialized
+    private static final class UnsupportedFieldException extends RuntimeException {
+        final Element element;
+
+        UnsupportedFieldException(Element element, String message) {
+            super(message);
+            this.element = element;
+        }
+    }
+}
