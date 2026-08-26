@@ -91,14 +91,17 @@ fields).
 
 ## Code generation
 
-Hand-writing a codec is still the ground truth, but you don't have to type
-it yourself. Annotate a record and a compile-time processor (bundled in
-this same jar, auto-discovered via `META-INF/services` on `javac`'s
-annotation processor path) generates a `<Type>Codec` class next to it —
-structurally the exact same code you'd write by hand, not a generic
-reflective mapper:
+Hand-writing a codec is still the ground truth, but you do not have to type
+it yourself. Apply `@JsonRecord` to a record and the bundled annotation
+processor emits a sibling `<Type>Codec` class in the same package. The
+class contains a generated `public static final JsonCodec<Type> CODEC` and
+serializes/deserializes the record with the same direct field access pattern
+as a hand-written codec.
 
 ```java
+import json.JsonName;
+import json.JsonRecord;
+
 @JsonRecord
 public record TaxResponse(@JsonName("tax_owed") double taxOwed,
                            @JsonName("effective_rate") double effectiveRate) {}
@@ -107,37 +110,43 @@ public record TaxResponse(@JsonName("tax_owed") double taxOwed,
 byte[] bytes = Json.toBytes(TaxResponseCodec.CODEC, response);
 ```
 
-The wire name for a component defaults to its Java name, verbatim — no
-guessed camelCase-to-snake_case conversion, matching this library's stance
-that naming should be explicit (see "Combinators" above for why `mapOf`
-works the same way). `@JsonName` is the escape hatch for the cases that
-need something else, e.g. matching a Rust `serde` struct's snake_case
-fields.
+This is a record-only annotation. If you apply it to a non-record type, the
+processor emits a compile error: `@JsonRecord can only be applied to a record`.
+The wire name for each component defaults to the record component name exactly
+as written, with no automatic case conversion. `@JsonName` is the explicit
+escape hatch for cases like snake_case wire keys.
 
-Supported component types: `int`, `long`, `double`, `boolean`, `String`,
-an enum, a `List<T>` of any supported type (nested lists included), or
-another type that is either itself `@JsonRecord`-annotated or exposes its
-own hand-written `CODEC` field. Every reference-typed component is treated
-as nullable automatically — no `@Nullable` annotation needed, no cost
-beyond the one branch a hand-written codec would have anyway. `Map` isn't
-auto-supported (there's no single obvious codec for two type parameters);
-the processor tells you so directly, at the record, with a `Codecs.mapOf`
-pointer, rather than leaving you to decode a "cannot find symbol" error in
-generated code you never asked to look at.
+Supported component types are:
 
-Generated classes can't get a `CODEC` field injected into your original
-type — a standard annotation processor can only emit new files, never
-modify the one it was triggered by — so the generated field lives on the
-sibling `<Type>Codec` class instead. If you're bridging this into your own
-reflective dispatch layer the way `Wire` in `cpurest-java` does, look for
-both conventions: a `CODEC` field directly on the type, then a `<Type>Codec`
-sibling class, in that order.
+- `int`, `long`, `double`, `boolean`
+- `String`
+- enums
+- `List<T>` where `T` is itself supported
+- nested records annotated with `@JsonRecord`
+- any other type that exposes its own `public static final JsonCodec<T> CODEC`
 
-**Maven**: implicit annotation-processor discovery from the plain compile
-classpath is unreliable under Maven's default in-process compilation (a
-long-standing Maven quirk that affects every JVM annotation processor, not
-something specific to this one — Lombok, MapStruct, and Dagger all document
-the identical workaround). Declare the processor path explicitly:
+Reference-typed components are treated as nullable automatically: when
+writing, a `null` becomes JSON `null`; when reading, a present `null` becomes
+`null`, and an absent field leaves the existing default value alone.
+
+The processor is intentionally strict about unsupported shapes. `Map` and
+other collection types are rejected with a clear compiler error that points at
+the offending record component and suggests the correct `Codecs.mapOf(...)`
+or `List<T>` pattern instead of producing a confusing generated-file error.
+
+Generated classes cannot inject a `CODEC` field into the original record —
+annotation processors can emit new files, not modify the source type that
+triggered them. The generated field therefore lives on the sibling
+`<Type>Codec` class, not on the record itself.
+
+### Annotation processor discovery
+
+For plain `javac` and Gradle builds, the bundled processor is auto-discovered
+from the compile classpath via `META-INF/services` with no extra setup.
+
+Under Maven, the usual caveat is that implicit processor discovery can be
+unreliable when Maven runs compiler internals in-process. If your build does
+not pick it up automatically, add it explicitly:
 
 ```xml
 <plugin>
@@ -155,8 +164,8 @@ the identical workaround). Declare the processor path explicitly:
 </plugin>
 ```
 
-Gradle and a plain `javac` invocation both pick the processor up from the
-ordinary compile classpath with no extra configuration.
+If your project is already compiling with the library on the classpath and the
+processor is being discovered normally, no additional configuration is required.
 
 ## Why it's fast
 
@@ -245,3 +254,7 @@ doesn't add any runtime dependency of its own — the hand-test classes are
 JUnit, and the annotation processor's own dependencies
 (`javax.annotation.processing`, `javax.lang.model`) are part of the JDK,
 not an external library.
+
+## License
+
+MIT (see `LICENSE`).
