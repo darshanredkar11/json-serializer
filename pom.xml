@@ -120,9 +120,6 @@
             <configuration>
               <mainClass>json.JsonTest</mainClass>
               <classpathScope>test</classpathScope>
-              <!-- JsonTest.main() calls System.exit(1) on failure; fork so
-                   that only kills this test's JVM, not Maven's own. -->
-              <fork>true</fork>
             </configuration>
           </execution>
           <execution>
@@ -132,7 +129,6 @@
             <configuration>
               <mainClass>json.CodecsTest</mainClass>
               <classpathScope>test</classpathScope>
-              <fork>true</fork>
             </configuration>
           </execution>
           <execution>
@@ -142,7 +138,6 @@
             <configuration>
               <mainClass>json.processor.JsonRecordProcessorTest</mainClass>
               <classpathScope>test</classpathScope>
-              <fork>true</fork>
             </configuration>
           </execution>
           <execution>
@@ -152,7 +147,6 @@
             <configuration>
               <mainClass>json.ConcurrencyTest</mainClass>
               <classpathScope>test</classpathScope>
-              <fork>true</fork>
             </configuration>
           </execution>
         </executions>
