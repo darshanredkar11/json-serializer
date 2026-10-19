@@ -22,7 +22,7 @@ public final class CodecsTest {
         nestedCombinators();
 
         System.out.println(checks + " checks, " + failures + " failures");
-        if (failures > 0) System.exit(1);
+        if (failures > 0) throw new AssertionError(failures + " test failures");
     }
 
     private static void primitives() {

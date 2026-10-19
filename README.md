@@ -15,6 +15,26 @@ Five source files, ~700 lines, plain `javac`.
 
 ## Usage
 
+## Maven / Gradle
+
+Maven:
+
+```xml
+<dependency>
+  <groupId>io.github.darshanredkar11</groupId>
+  <artifactId>json-serializer</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+Gradle:
+
+```groovy
+implementation 'io.github.darshanredkar11:json-serializer:1.0.0'
+```
+
+The published artifact has no runtime dependencies and targets Java 17 or newer.
+
 Define a codec next to your type. This is the whole API surface:
 
 ```java
