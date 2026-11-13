@@ -33,6 +33,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/benchmarks/results"
           git worktree add ../encoder-baseline "$BASE_SHA"
+          mkdir -p ../encoder-baseline/benchmarks/results
           cd ../encoder-baseline
           mvn --batch-mode --no-transfer-progress clean install
           mvn --batch-mode --no-transfer-progress -f benchmarks/pom.xml clean package
@@ -47,6 +48,7 @@ jobs:
       - name: Build and benchmark outlined-loop candidate
         run: |
           set -euo pipefail
+          mkdir -p benchmarks/results
           mvn --batch-mode --no-transfer-progress clean install
           mvn --batch-mode --no-transfer-progress -f benchmarks/pom.xml clean package
           for threads in 1 4; do
