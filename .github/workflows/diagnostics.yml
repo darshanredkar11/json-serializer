@@ -56,7 +56,7 @@ jobs:
             java -Xms2g -Xmx2g -jar target/benchmarks.jar \
               'json.bench.CollectionScalingBenchmark.*' \
               -t "$threads" -p tagCount=0,3,16,64,256,1024 \
-              -f 3 -wi 3 -i 4 -w 1s -r 1s -prof gc \
+              -bm thrpt -f 2 -wi 2 -i 3 -w 500ms -r 500ms -prof gc \
               -rf json -rff "results/scaling-${threads}t.json"
           done
 
