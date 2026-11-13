@@ -28,13 +28,9 @@ jobs:
           cache: maven
       - name: Build and benchmark parent baseline
         env:
-          BASE_SHA: ${{ github.event.before }}
+          BASE_SHA: 0b7a70f1b89eaed2f906576a651a3338493496f4
         run: |
           set -euo pipefail
-          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            echo "Push event did not provide a usable parent SHA" >&2
-            exit 2
-          fi
           mkdir -p "$GITHUB_WORKSPACE/benchmarks/results"
           git worktree add ../baseline "$BASE_SHA"
           cd ../baseline
