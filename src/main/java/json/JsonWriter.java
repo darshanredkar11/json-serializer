@@ -263,7 +263,7 @@ public final class JsonWriter {
         int i = 0;
         for (; i < len; i++) {
             char c = s.charAt(i);
-            if (c >= 0x80 || ESCAPE[c] != 0) break;
+            if (c >= 0x80 || c < 0x20 || c == '"' || c == '\\') break;
             b[p++] = (byte) c;
         }
         if (i == len) {
