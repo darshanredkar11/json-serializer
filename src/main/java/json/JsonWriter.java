@@ -120,7 +120,18 @@ public final class JsonWriter {
 
     /** Writes a list of string values, typically as the contents of an array. */
     public JsonWriter values(List<String> values) {
-        for (int i = 0, n = values.size(); i < n; i++) value(values.get(i));
+        for (int i = 0, n = values.size(); i < n; i++) {
+            String v = values.get(i);
+            if (v == null) {
+                nullValue();
+            } else {
+                // Reserve the comma plus quoted string in one capacity check.
+                ensure(v.length() + 3);
+                if (comma) buf[pos++] = ',';
+                rawStringReserved(v);
+                comma = true;
+            }
+        }
         return this;
     }
 
@@ -239,8 +250,13 @@ public final class JsonWriter {
 
     /** Writes a quoted, escaped string without touching comma state. */
     void rawString(String s) {
+        ensure(s.length() + 2);
+        rawStringReserved(s);
+    }
+
+    /** Writes a quoted string when the caller has already reserved its space. */
+    private void rawStringReserved(String s) {
         int len = s.length();
-        ensure(len + 2);
         byte[] b = buf;
         int p = pos;
         b[p++] = '"';
