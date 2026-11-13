@@ -42,7 +42,7 @@ jobs:
             -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 12 \
             > results/hotspot-noinline-all-values.log 2>&1
           java -Xms512m -Xmx2g -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining \
-            '-XX:CompileCommand=dontinline,json/JsonWriter.value,(Ljava/lang/String;)Ljson/JsonWriter;' \
+            '-XX:CompileCommand=dontinline,json/JsonWriter.value(Ljava/lang/String;)Ljson/JsonWriter;' \
             -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 12 \
             > results/hotspot-noinline-string-value.log 2>&1
           grep -E -C 5 'JsonWriter::value|JsonWriter::rawString|User\$UserCodec::write|HeavyLoadBenchmark' \
