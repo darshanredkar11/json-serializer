@@ -231,6 +231,7 @@ public final class JsonWriter {
     }
 
     /** Writes a quoted, escaped string without touching comma state. */
+    @SuppressWarnings("deprecation")
     void rawString(String s) {
         int len = s.length();
         ensure(len + 2);
@@ -241,15 +242,19 @@ public final class JsonWriter {
         for (; i < len; i++) {
             char c = s.charAt(i);
             if (c >= 0x80 || ESCAPE[c] != 0) break;
-            b[p++] = (byte) c;
         }
         if (i == len) {
+            // The deprecated overload copies into our existing buffer without
+            // allocating an intermediate byte array. It is safe after the
+            // ASCII/JSON-escape validation loop above.
+            s.getBytes(0, len, b, p);
+            p += len;
             b[p++] = '"';
             pos = p;
             return;
         }
         pos = p;
-        slowString(s, i, len);
+        slowString(s, 0, len);
     }
 
     /** Handles escapes and non-ASCII from index {@code i} onwards. */
