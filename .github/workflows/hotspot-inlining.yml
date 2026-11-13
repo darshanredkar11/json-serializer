@@ -40,12 +40,18 @@ jobs:
           java -Xms512m -Xmx2g -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining \
             -XX:CompileCommand=dontinline,json/JsonWriter.value \
             -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 12 \
-            > results/hotspot-noinline-value.log 2>&1
+            > results/hotspot-noinline-all-values.log 2>&1
+          java -Xms512m -Xmx2g -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining \
+            '-XX:CompileCommand=dontinline,json/JsonWriter.value,(Ljava/lang/String;)Ljson/JsonWriter;' \
+            -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 12 \
+            > results/hotspot-noinline-string-value.log 2>&1
           grep -E -C 5 'JsonWriter::value|JsonWriter::rawString|User\$UserCodec::write|HeavyLoadBenchmark' \
             results/hotspot-default.log > results/hotspot-default-focused.log || true
           grep -E -C 5 'JsonWriter::value|JsonWriter::rawString|User\$UserCodec::write|HeavyLoadBenchmark' \
-            results/hotspot-noinline-value.log > results/hotspot-noinline-focused.log || true
-          grep -E 'ops/s|bytes/op|CPU' results/hotspot-default.log results/hotspot-noinline-value.log > results/hotspot-throughput.txt || true
+            results/hotspot-noinline-all-values.log > results/hotspot-noinline-all-values-focused.log || true
+          grep -E -C 5 'JsonWriter::value|JsonWriter::rawString|User\$UserCodec::write|HeavyLoadBenchmark' \
+            results/hotspot-noinline-string-value.log > results/hotspot-noinline-string-value-focused.log || true
+          grep -E 'ops/s|bytes/op|CPU' results/hotspot-default.log results/hotspot-noinline-all-values.log results/hotspot-noinline-string-value.log > results/hotspot-throughput.txt || true
       - name: Upload compilation evidence
         uses: actions/upload-artifact@v4
         with:
