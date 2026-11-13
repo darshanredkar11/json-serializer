@@ -31,7 +31,7 @@ jobs:
           cache: maven
       - name: Build and benchmark pre-refactor baseline
         env:
-          BASE_SHA: 0b7a70f1b89eaed2f906576a651a3338493496f4
+          BASE_SHA: ef2741a33aa94a9d4c326e24346041a49afd0fea
         run: |
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/benchmarks/results"
