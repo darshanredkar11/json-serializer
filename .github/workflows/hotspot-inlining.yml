@@ -1,0 +1,55 @@
+name: Serializer HotSpot inlining diagnosis
+
+on:
+  push:
+    branches:
+      - "benchmark/diagnostic-scaling-jfr"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: serializer-hotspot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hotspot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build serializer and benchmark harness
+        run: |
+          mvn --batch-mode --no-transfer-progress clean install
+          mvn --batch-mode --no-transfer-progress -f benchmarks/pom.xml clean package
+      - name: Capture HotSpot inlining decisions
+        working-directory: benchmarks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          java -Xms512m -Xmx2g -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining \
+            -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 12 \
+            > results/hotspot-default.log 2>&1
+          java -Xms512m -Xmx2g -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining \
+            -XX:CompileCommand=dontinline,json/JsonWriter.value \
+            -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 12 \
+            > results/hotspot-noinline-value.log 2>&1
+          grep -E -C 5 'JsonWriter::value|JsonWriter::rawString|User\$UserCodec::write|HeavyLoadBenchmark' \
+            results/hotspot-default.log > results/hotspot-default-focused.log || true
+          grep -E -C 5 'JsonWriter::value|JsonWriter::rawString|User\$UserCodec::write|HeavyLoadBenchmark' \
+            results/hotspot-noinline-value.log > results/hotspot-noinline-focused.log || true
+          grep -E 'ops/s|bytes/op|CPU' results/hotspot-default.log results/hotspot-noinline-value.log > results/hotspot-throughput.txt || true
+      - name: Upload compilation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: serializer-hotspot-inlining-evidence
+          path: benchmarks/results/
+          if-no-files-found: error
+          retention-days: 30
