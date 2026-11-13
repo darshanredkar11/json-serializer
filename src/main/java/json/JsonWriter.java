@@ -264,18 +264,32 @@ public final class JsonWriter {
         for (; i < len; i++) {
             char c = s.charAt(i);
             if (c >= 0x80 || c < 0x20 || c == '"' || c == '\\') break;
-            b[p++] = (byte) c;
         }
         if (i == len) {
-            b[p++] = '"';
-            pos = p;
+            // The scan proves every character is ASCII and needs no escaping.
+            // Copy directly into the writer buffer without a temporary array.
+            copyAscii(s, 0, len, b, p);
+            pos = p + len;
+            buf[pos++] = '"';
             return;
         }
-        pos = p;
+        // Copy the validated ASCII prefix before encoding/escaping the suffix.
+        copyAscii(s, 0, i, b, p);
+        pos = p + i;
         slowString(s, i, len);
     }
 
     /** Handles escapes and non-ASCII from index {@code i} onwards. */
+    /**
+     * Copies a range already proven to contain only ASCII characters.
+     * This legacy API writes directly into the destination array, avoiding
+     * the temporary byte[] created by String.getBytes(Charset).
+     */
+    @SuppressWarnings("deprecation")
+    private static void copyAscii(String s, int start, int end, byte[] dst, int offset) {
+        s.getBytes(start, end, dst, offset);
+    }
+
     private void slowString(String s, int i, int len) {
         for (; i < len; i++) {
             ensure(6);
