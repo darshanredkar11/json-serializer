@@ -1,0 +1,69 @@
+name: Serializer decoder single-pass A/B
+
+on:
+  push:
+    branches:
+      - "benchmark/diagnostic-scaling-jfr"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: serializer-decoder-ab-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  decoder-ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build and benchmark parent baseline
+        env:
+          BASE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "Push event did not provide a usable parent SHA" >&2
+            exit 2
+          fi
+          git worktree add ../baseline "$BASE_SHA"
+          cd ../baseline
+          mvn --batch-mode --no-transfer-progress clean install
+          mvn --batch-mode --no-transfer-progress -f benchmarks/pom.xml clean package
+          mkdir -p benchmarks/results
+          for threads in 1 4; do
+            java -Xms2g -Xmx2g -jar benchmarks/target/benchmarks.jar \
+              'json.bench.CollectionScalingBenchmark.ownDecodeBytes' \
+              -t "$threads" -p tagCount=256 -bm thrpt -f 3 -wi 3 -i 5 \
+              -w 1s -r 1s -prof gc -rf json \
+              -rff "benchmarks/results/decoder-baseline-${threads}t.json"
+          done
+      - name: Build and benchmark single-pass candidate
+        run: |
+          set -euo pipefail
+          mvn --batch-mode --no-transfer-progress clean install
+          mvn --batch-mode --no-transfer-progress -f benchmarks/pom.xml clean package
+          mkdir -p benchmarks/results
+          for threads in 1 4; do
+            java -Xms2g -Xmx2g -jar benchmarks/target/benchmarks.jar \
+              'json.bench.CollectionScalingBenchmark.ownDecodeBytes' \
+              -t "$threads" -p tagCount=256 -bm thrpt -f 3 -wi 3 -i 5 \
+              -w 1s -r 1s -prof gc -rf json \
+              -rff "benchmarks/results/decoder-single-pass-${threads}t.json"
+          done
+      - name: Upload matched decoder comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: serializer-decoder-single-pass-ab
+          path: benchmarks/results/
+          if-no-files-found: error
+          retention-days: 30
