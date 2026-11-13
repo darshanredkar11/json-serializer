@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Appends JSON straight into a growable UTF-8 byte buffer.
@@ -114,6 +115,12 @@ public final class JsonWriter {
         startValue();
         rawString(v);
         comma = true;
+        return this;
+    }
+
+    /** Writes a list of string values, typically as the contents of an array. */
+    public JsonWriter values(List<String> values) {
+        for (int i = 0, n = values.size(); i < n; i++) value(values.get(i));
         return this;
     }
 
