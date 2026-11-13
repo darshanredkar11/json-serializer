@@ -45,6 +45,24 @@ jobs:
             -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 15 \
             | tee results/jfr-own-encode-noinline.json
           jfr summary results/jfr-own-encode-noinline.jfr > results/jfr-own-encode-noinline-summary.txt
+
+          echo "Unprofiled default JIT baseline"
+          java -Xms512m -Xmx2g -cp target/benchmarks.jar \
+            json.bench.HeavyLoadBenchmark own encode 4 4 15 \
+            | tee results/stress-default.json
+
+          echo "Unprofiled value() no-inline"
+          java -Xms512m -Xmx2g \
+            -XX:CompileCommand=dontinline,json/JsonWriter.value \
+            -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 15 \
+            | tee results/stress-value-noinline.json
+
+          echo "Unprofiled value() and rawString() no-inline"
+          java -Xms512m -Xmx2g \
+            -XX:CompileCommand=dontinline,json/JsonWriter.value \
+            -XX:CompileCommand=dontinline,json/JsonWriter.rawString \
+            -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 15 \
+            | tee results/stress-value-rawstring-noinline.json
       - name: Upload writer profiles
         uses: actions/upload-artifact@v4
         with:
