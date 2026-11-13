@@ -5,3 +5,5 @@ A separate JFR run disables inlining for `JsonWriter.value` and `JsonWriter.rawS
 The workflow compares default JIT behavior with no-inline writer methods on the same runner to isolate inlining effects.
 
 Added unprofiled A/B/C throughput runs to isolate the effect of inlining value() and rawString().
+
+The latest matched-run comparison includes Jackson as the reference implementation.
