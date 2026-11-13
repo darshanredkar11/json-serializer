@@ -1,0 +1,44 @@
+name: Serializer writer hotspot isolation
+
+on:
+  push:
+    branches:
+      - "benchmark/diagnostic-scaling-jfr"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  writer-profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build serializer and diagnostic harness
+        run: |
+          mvn --batch-mode --no-transfer-progress clean install
+          mvn --batch-mode --no-transfer-progress -f benchmarks/pom.xml clean package
+      - name: Profile writer with serializer methods kept out of line
+        working-directory: benchmarks
+        run: |
+          mkdir -p results
+          java -Xms512m -Xmx2g \
+            -XX:CompileCommand=dontinline,json/JsonWriter.value \
+            -XX:CompileCommand=dontinline,json/JsonWriter.rawString \
+            "-XX:StartFlightRecording=filename=results/jfr-own-encode-noinline.jfr,settings=profile,dumponexit=true" \
+            -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 15 \
+            | tee results/jfr-own-encode-noinline.json
+          jfr summary results/jfr-own-encode-noinline.jfr > results/jfr-own-encode-noinline-summary.txt
+      - name: Upload writer profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: json-serializer-writer-hotspot-profile
+          path: benchmarks/results/
+          if-no-files-found: error
+          retention-days: 90
