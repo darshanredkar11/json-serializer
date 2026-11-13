@@ -35,6 +35,7 @@ jobs:
             echo "Push event did not provide a usable parent SHA" >&2
             exit 2
           fi
+          mkdir -p "$GITHUB_WORKSPACE/benchmarks/results"
           git worktree add ../baseline "$BASE_SHA"
           cd ../baseline
           mvn --batch-mode --no-transfer-progress clean install
@@ -47,6 +48,7 @@ jobs:
               -w 1s -r 1s -prof gc -rf json \
               -rff "benchmarks/results/decoder-baseline-${threads}t.json"
           done
+          cp benchmarks/results/decoder-baseline-*.json "$GITHUB_WORKSPACE/benchmarks/results/"
       - name: Build and benchmark single-pass candidate
         run: |
           set -euo pipefail
