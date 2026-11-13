@@ -1,0 +1,39 @@
+name: Encoder candidate HotSpot decisions
+
+on:
+  push:
+    branches:
+      - "experiment/encoder-bulk-ascii"
+
+permissions:
+  contents: read
+
+jobs:
+  inline-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build benchmark harness
+        run: |
+          mvn --batch-mode --no-transfer-progress clean install
+          mvn --batch-mode --no-transfer-progress -f benchmarks/pom.xml clean package
+      - name: Capture candidate inlining decisions
+        working-directory: benchmarks
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          java -Xms512m -Xmx2g -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 12 > results/candidate-hotspot.log 2>&1
+          grep -E -C 6 'JsonWriter::value|JsonWriter::rawString|User\$UserCodec::write|HeavyLoadBenchmark' results/candidate-hotspot.log > results/candidate-hotspot-focused.log || true
+      - name: Upload candidate compiler log
+        uses: actions/upload-artifact@v4
+        with:
+          name: encoder-candidate-hotspot
+          path: benchmarks/results/
+          if-no-files-found: error
+          retention-days: 30
