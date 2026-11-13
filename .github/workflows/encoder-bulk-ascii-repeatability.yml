@@ -1,0 +1,46 @@
+name: Encoder bulk ASCII repeatability
+
+on:
+  push:
+    branches:
+      - "experiment/encoder-bulk-ascii"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  encoder-jmh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build and benchmark baseline
+        run: |
+          set -euo pipefail
+          git worktree add ../baseline deb4399b9b831d5e1a8521ebd4a91dd556c511c2
+          cd ../baseline
+          mvn --batch-mode --no-transfer-progress clean install
+          mvn --batch-mode --no-transfer-progress -f benchmarks/pom.xml clean package
+          mkdir -p "$GITHUB_WORKSPACE/results"
+          java -Xms2g -Xmx2g -jar benchmarks/target/benchmarks.jar ".*EncodeBytes" -t 4 -p tagCount=256 -bm thrpt -f 3 -wi 3 -i 5 -w 1s -r 1s -prof gc -rf json -rff "$GITHUB_WORKSPACE/results/encoder-baseline-jmh.json"
+      - name: Build and benchmark bulk-copy candidate
+        run: |
+          set -euo pipefail
+          mvn --batch-mode --no-transfer-progress clean install
+          mvn --batch-mode --no-transfer-progress -f benchmarks/pom.xml clean package
+          java -Xms2g -Xmx2g -jar benchmarks/target/benchmarks.jar ".*EncodeBytes" -t 4 -p tagCount=256 -bm thrpt -f 3 -wi 3 -i 5 -w 1s -r 1s -prof gc -rf json -rff "$GITHUB_WORKSPACE/results/encoder-candidate-jmh.json"
+      - name: Upload repeated JMH comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: encoder-bulk-ascii-repeatability
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
