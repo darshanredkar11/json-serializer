@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - "benchmark/diagnostic-scaling-jfr"
+  pull_request:
+    branches:
+      - "benchmark/diagnostic-scaling-jfr"
   workflow_dispatch:
 
 permissions:
