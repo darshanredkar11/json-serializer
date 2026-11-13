@@ -63,6 +63,10 @@ public final class JsonTest {
         eq("{\"a\":[1,2,{\"b\":true}]}", w.toString(), "nested comma placement");
 
         eq("[]", new JsonWriter().beginArray().endArray().toString(), "empty array");
+        eq("[\"a\",null,\"b\\\\c\"]", new JsonWriter().beginArray()
+                .values(Arrays.asList("a", null, "b\\c")).endArray().toString(), "batched strings and nulls");
+        eq("[]", new JsonWriter().beginArray().values(java.util.Collections.emptyList())
+                .endArray().toString(), "empty batched strings");
         eq("{}", new JsonWriter().beginObject().endObject().toString(), "empty object");
         eq("[{\"pre\":1}]", new JsonWriter().beginArray()
                 .raw("{\"pre\":1}".getBytes(StandardCharsets.UTF_8)).endArray().toString(), "raw fragment");
