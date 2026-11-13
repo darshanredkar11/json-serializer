@@ -47,11 +47,16 @@ public final class User {
             w.name(ACTIVE).value(u.active);
             w.name(SCORE).value(u.score);
             w.name(TAGS).beginArray();
-            for (int i = 0, n = u.tags.size(); i < n; i++) w.value(u.tags.get(i));
+            writeTags(w, u.tags);
             w.endArray();
             w.name(ADDRESS);
             if (u.address == null) w.nullValue(); else Address.CODEC.write(w, u.address);
             w.endObject();
+        }
+
+        // Keep the repeated string-value loop out of the larger object codec body.
+        private static void writeTags(JsonWriter w, List<String> tags) {
+            for (int i = 0, n = tags.size(); i < n; i++) w.value(tags.get(i));
         }
 
         @Override public User read(JsonReader r) {
