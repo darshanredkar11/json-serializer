@@ -63,6 +63,11 @@ jobs:
             -XX:CompileCommand=dontinline,json/JsonWriter.rawString \
             -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 15 \
             | tee results/stress-value-rawstring-noinline.json
+
+          echo "Jackson reference on the same runner"
+          java -Xms512m -Xmx2g -cp target/benchmarks.jar \
+            json.bench.HeavyLoadBenchmark jackson encode 4 4 15 \
+            | tee results/stress-jackson.json
       - name: Upload writer profiles
         uses: actions/upload-artifact@v4
         with:
