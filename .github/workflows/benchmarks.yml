@@ -1,0 +1,97 @@
+name: Serializer benchmarks
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "benchmarks/**"
+      - "src/main/java/**"
+      - "pom.xml"
+      - ".github/workflows/benchmarks.yml"
+  push:
+    branches:
+      - "benchmark/**"
+
+permissions:
+  contents: read
+
+jobs:
+  jmh:
+    name: JMH and concurrent stress (Temurin 21)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build and test current serializer checkout
+        run: mvn --batch-mode --no-transfer-progress clean install
+
+      - name: Build benchmark harness
+        working-directory: benchmarks
+        run: mvn --batch-mode --no-transfer-progress clean package
+
+      - name: Capture environment
+        run: |
+          mkdir -p benchmarks/results
+          {
+            echo "UTC: $(date -u +%FT%TZ)"
+            echo
+            echo "Java:"
+            java -version 2>&1
+            echo
+            echo "OS:"
+            uname -a
+            echo
+            echo "CPU:"
+            lscpu
+            echo
+            echo "Memory:"
+            free -h
+            echo
+            echo "Benchmark dependencies:"
+            grep -E '<(jackson.version|gson.version|jmh.version)>' benchmarks/pom.xml
+          } > benchmarks/results/environment.txt
+
+      - name: Run extended JMH with GC profiler (1, 2, 4, 8 threads)
+        working-directory: benchmarks
+        shell: bash
+        run: |
+          set -euo pipefail
+          for threads in 1 2 4 8; do
+            java -Xms2g -Xmx2g -jar target/benchmarks.jar \
+              -t "$threads" -f 3 -wi 5 -i 5 -w 1s -r 1s -prof gc \
+              -rf json -rff "results/jmh-${threads}t.json"
+          done
+
+      - name: Run sustained concurrent CPU and allocation stress
+        working-directory: benchmarks
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > results/heavy-load.jsonl
+          for library in own jackson gson; do
+            for operation in encode decode; do
+              for threads in 1 2 4 8 16; do
+                echo "Running $library $operation with $threads threads"
+                java -Xms256m -Xmx2g -cp target/benchmarks.jar \
+                  json.bench.HeavyLoadBenchmark \
+                  "$library" "$operation" "$threads" 8 20 \
+                  | tee -a results/heavy-load.jsonl
+              done
+            done
+          done
+
+      - name: Upload raw benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: json-serializer-benchmarks-java21
+          path: benchmarks/results/
+          if-no-files-found: error
+          retention-days: 90
