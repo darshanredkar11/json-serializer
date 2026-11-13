@@ -24,10 +24,20 @@ jobs:
         run: |
           mvn --batch-mode --no-transfer-progress clean install
           mvn --batch-mode --no-transfer-progress -f benchmarks/pom.xml clean package
-      - name: Profile writer with serializer methods kept out of line
+      - name: Capture default and no-inline writer profiles on the same runner
         working-directory: benchmarks
         run: |
+          set -euo pipefail
           mkdir -p results
+
+          echo "Default JIT inlining profile"
+          java -Xms512m -Xmx2g \
+            "-XX:StartFlightRecording=filename=results/jfr-own-encode-default.jfr,settings=profile,dumponexit=true" \
+            -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 15 \
+            | tee results/jfr-own-encode-default.json
+          jfr summary results/jfr-own-encode-default.jfr > results/jfr-own-encode-default-summary.txt
+
+          echo "No-inline diagnostic profile"
           java -Xms512m -Xmx2g \
             -XX:CompileCommand=dontinline,json/JsonWriter.value \
             -XX:CompileCommand=dontinline,json/JsonWriter.rawString \
@@ -35,7 +45,7 @@ jobs:
             -cp target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 15 \
             | tee results/jfr-own-encode-noinline.json
           jfr summary results/jfr-own-encode-noinline.jfr > results/jfr-own-encode-noinline-summary.txt
-      - name: Upload writer profile
+      - name: Upload writer profiles
         uses: actions/upload-artifact@v4
         with:
           name: json-serializer-writer-hotspot-profile
