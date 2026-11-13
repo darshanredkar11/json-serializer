@@ -1,0 +1,48 @@
+name: Encoder bulk ASCII source experiment
+
+on:
+  push:
+    branches:
+      - "experiment/encoder-bulk-ascii"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  encoder-ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build baseline and measure
+        run: |
+          set -euo pipefail
+          git worktree add ../baseline deb4399b9b831d5e1a8521ebd4a91dd556c511c2
+          cd ../baseline
+          mvn --batch-mode --no-transfer-progress clean install
+          mvn --batch-mode --no-transfer-progress -f benchmarks/pom.xml clean package
+          mkdir -p "$GITHUB_WORKSPACE/results"
+          java -Xms2g -Xmx2g -cp benchmarks/target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 15 > "$GITHUB_WORKSPACE/results/baseline-own.json"
+          java -Xms2g -Xmx2g -cp benchmarks/target/benchmarks.jar json.bench.HeavyLoadBenchmark jackson encode 4 4 15 > "$GITHUB_WORKSPACE/results/baseline-jackson.json"
+      - name: Build candidate and measure
+        run: |
+          set -euo pipefail
+          mvn --batch-mode --no-transfer-progress clean install
+          mvn --batch-mode --no-transfer-progress -f benchmarks/pom.xml clean package
+          java -Xms2g -Xmx2g -cp benchmarks/target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 15 > "$GITHUB_WORKSPACE/results/candidate-own.json"
+          java -Xms2g -Xmx2g -XX:+UnlockDiagnosticVMOptions -XX:CompileCommand=dontinline,json/JsonWriter.value -cp benchmarks/target/benchmarks.jar json.bench.HeavyLoadBenchmark own encode 4 4 15 > "$GITHUB_WORKSPACE/results/candidate-own-noinline.json"
+      - name: Upload encoder A/B results
+        uses: actions/upload-artifact@v4
+        with:
+          name: encoder-bulk-ascii-ab
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
