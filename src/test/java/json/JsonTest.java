@@ -89,6 +89,8 @@ public final class JsonTest {
         eq("a\"b\\c/d\nz", firstString("[\"a\\\"b\\\\c\\/d\\nz\"]"), "input escapes");
         eq("é你🚀", firstString("[\"\\u00e9\\u4f60\\ud83d\\ude80\"]"), "\\u escapes");
         eq("café 你 🚀", firstString("[\"café 你 🚀\"]"), "raw utf-8 input");
+        throwsReader(new byte[]{'"', (byte) 0xC3, '(', '"'}, "invalid UTF-8 in string");
+        throwsReader(new byte[]{'"', 'a', 0x01, 'b', '"'}, "unescaped control in string");
 
         // A long string forces the writer buffer and the reader's char buffer to grow.
         StringBuilder sb = new StringBuilder();
@@ -216,6 +218,15 @@ public final class JsonTest {
             pass();
         } catch (RuntimeException e) {
             fail(what + " threw " + e.getClass().getSimpleName() + " instead of JsonException");
+        }
+    }
+
+    private static void throwsReader(byte[] input, String what) {
+        try {
+            new JsonReader(input).readString();
+            fail("expected a JsonException for " + what);
+        } catch (JsonException expected) {
+            pass();
         }
     }
 
