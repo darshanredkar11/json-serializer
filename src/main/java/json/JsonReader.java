@@ -98,7 +98,7 @@ public final class JsonReader {
         if(peek()=='n'){expectLiteral("null");return null;}
         if(peek()!='"')throw error("expected a string");
         pos++; int start=pos,p=pos;
-        while(p<end){int x=buf[p]&0xff;if(x=='"'){if(indexOfEscapeOrNonAscii(start,p)<0){pos=p+1;return new String(buf,start,p-start,StandardCharsets.US_ASCII);}break;}if(x=='\\'||x<0x20||x>=0x80)break;p++;}
+        while(p<end){int x=buf[p]&0xff;if(x=='"'){pos=p+1;return new String(buf,start,p-start,StandardCharsets.US_ASCII);}if(x=='\\'||x<0x20||x>=0x80)break;p++;}
         if(p>=end)throw errorAt("unterminated string",p);
         return slowString(start,p);
     }
