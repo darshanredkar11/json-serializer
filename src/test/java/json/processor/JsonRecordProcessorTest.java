@@ -45,6 +45,7 @@ public final class JsonRecordProcessorTest {
         enumFieldRoundTrips();
         composedListOfNestedRecordsRoundTrips();
         generatedHashDispatchHandlesCollisionsAndEscapedNames();
+        generatedStringsUseDirectRuntimeOperations();
         unsupportedFieldTypeFailsCompilationClearly();
 
         System.out.println(checks + " checks, " + failures + " failures");
@@ -262,6 +263,38 @@ public final class JsonRecordProcessorTest {
             Method run = runner.getMethod("run");
             run.setAccessible(true);
             eq("OK", run.invoke(null), "hash collisions and escaped non-ASCII keys decode correctly");
+        }
+    }
+
+
+    private static void generatedStringsUseDirectRuntimeOperations() throws Exception {
+        String source = """
+            package t;
+            import json.JsonRecord;
+
+            @JsonRecord
+            record FastStrings(String name, String note, int count, boolean active) {}
+
+            final class Runner {
+                public static String run() {
+                    FastStrings input = new FastStrings("Ada", null, 3, true);
+                    byte[] bytes = json.Json.toBytes(FastStringsCodec.CODEC, input);
+                    FastStrings output = json.Json.parse(FastStringsCodec.CODEC, bytes);
+                    return input.equals(output) ? "OK" : "MISMATCH:" + output;
+                }
+            }
+            """;
+        Path outDir = compile(source);
+        String generated = Files.readString(outDir.resolve("t/FastStringsCodec.java"));
+        eq(true, generated.contains(".value(value.name())"), "generated String writer uses native writer path");
+        eq(true, generated.contains("name = r.readString()"), "generated String reader uses native reader path");
+        eq(false, generated.contains("Codecs.STRING"), "generated String path avoids generic codec dispatch");
+        try (URLClassLoader loader = new URLClassLoader(
+                new URL[] {outDir.toUri().toURL()}, JsonRecordProcessorTest.class.getClassLoader())) {
+            Class<?> runner = loader.loadClass("t.Runner");
+            Method run = runner.getMethod("run");
+            run.setAccessible(true);
+            eq("OK", run.invoke(null), "direct generated String paths preserve null semantics");
         }
     }
 
