@@ -24,8 +24,8 @@ public class GeneratedDispatchBenchmark {
     public record WideRecord(int id, int f1, int f2, int f3, int f4, int f5,
                              int f6, int f7, int f8, int f9, int f10, int f11) {}
 
-    private static final byte[] JSON = ("{""id"":1,""f1"":2,""f2"":3,""f3"":4,""f4"":5,"
-            + ""f5"":6,""f6"":7,""f7"":8,""f8"":9,""f9"":10,""f10"":11,""f11"":12}")
+    private static final byte[] JSON = ("{\\"id\\":1,\\"f1\\":2,\\"f2\\":3,\\"f3\\":4,\\"f4\\":5,"
+            + "\\"f5\\":6,\\"f6\\":7,\\"f7\\":8,\\"f8\\":9,\\"f9\\":10,\\"f10\\":11,\\"f11\\":12}")
             .getBytes(StandardCharsets.UTF_8);
 
     private static final JsonField ID = JsonField.of("id");
