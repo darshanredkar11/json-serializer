@@ -7,6 +7,8 @@ import json.example.User;
 
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.MemoryUsage;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,6 +61,9 @@ public final class HeavyLoadBenchmark {
             THREADS.setThreadAllocatedMemoryEnabled(true);
         }
 
+        for (MemoryPoolMXBean pool : ManagementFactory.getMemoryPoolMXBeans()) {
+            try { pool.resetPeakUsage(); } catch (UnsupportedOperationException ignored) { }
+        }
         long gcCountBefore = gcCount();
         long gcTimeBefore = gcTime();
         CountDownLatch ready = new CountDownLatch(threadCount);
@@ -98,6 +103,16 @@ public final class HeavyLoadBenchmark {
             checksum += result.checksum;
         }
 
+        long peakHeapUsed = ManagementFactory.getMemoryPoolMXBeans().stream()
+                .map(MemoryPoolMXBean::getPeakUsage)
+                .filter(java.util.Objects::nonNull)
+                .mapToLong(MemoryUsage::getUsed).sum();
+        // Measure retained heap after the timed section, not during throughput measurement.
+        System.gc();
+        Thread.sleep(150);
+        long retainedHeapAfterGc = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed();
+        long maxHeap = Runtime.getRuntime().maxMemory();
+
         int processors = Runtime.getRuntime().availableProcessors();
         double throughput = operations / (wallNanos / 1_000_000_000.0);
         double allocatedPerOp = allocationSupported && operations > 0
@@ -112,13 +127,14 @@ public final class HeavyLoadBenchmark {
                 + "\"allocated_bytes_per_op\":%.2f,\"allocated_bytes_total\":%d,"
                 + "\"cpu_core_percent\":%.2f,\"cpu_machine_percent\":%.2f,"
                 + "\"gc_count\":%d,\"gc_time_ms\":%d,\"heap_used_bytes\":%d,"
-                + "\"peak_rss_kb\":%d,\"checksum\":%d}%n",
+                + "\"peak_heap_used_bytes\":%d,\"retained_heap_after_gc_bytes\":%d,"
+                + "\"max_heap_bytes\":%d,\"peak_rss_kb\":%d,\"checksum\":%d}%n",
                 library, operation, threadCount, bytes.length, processors, operations,
                 wallNanos / 1_000_000.0, throughput, allocatedPerOp, allocated,
                 oneCoreCpuPercent, machineCpuPercent,
                 gcCount() - gcCountBefore, gcTime() - gcTimeBefore,
                 ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed(),
-                peakRssKb(), checksum);
+                peakHeapUsed, retainedHeapAfterGc, maxHeap, peakRssKb(), checksum);
     }
 
     private static WorkerResult execute(String library, String operation, User user,
