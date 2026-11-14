@@ -15,53 +15,77 @@ public final class Json {
     private static final ThreadLocal<Boolean> WRITING = ThreadLocal.withInitial(() -> Boolean.FALSE);
     private static final ThreadLocal<Boolean> READING = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
+    // Bound memory retained by long-lived platform threads after oversized requests.
+    private static final int MAX_RETAINED_WRITER_BYTES = 1024 * 1024;
+    private static final int MAX_RETAINED_READER_CHARS = 64 * 1024;
+
     private Json() {}
 
     public static <T> byte[] toBytes(JsonCodec<T> codec, T value) {
         beginWrite();
+        JsonWriter w = WRITER.get();
         try {
-            JsonWriter w = WRITER.get().reset();
+            w.reset();
             codec.write(w, value);
             return w.toByteArray();
-        } finally { endWrite(); }
+        } finally {
+            w.resetAndTrim(MAX_RETAINED_WRITER_BYTES);
+            endWrite();
+        }
     }
 
     public static <T> String toString(JsonCodec<T> codec, T value) {
         beginWrite();
+        JsonWriter w = WRITER.get();
         try {
-            JsonWriter w = WRITER.get().reset();
+            w.reset();
             codec.write(w, value);
             return w.toString();
-        } finally { endWrite(); }
+        } finally {
+            w.resetAndTrim(MAX_RETAINED_WRITER_BYTES);
+            endWrite();
+        }
     }
 
     public static <T> void writeTo(JsonCodec<T> codec, T value, OutputStream out) throws IOException {
         beginWrite();
+        JsonWriter w = WRITER.get();
         try {
-            JsonWriter w = WRITER.get().reset();
+            w.reset();
             codec.write(w, value);
             w.writeTo(out);
-        } finally { endWrite(); }
+        } finally {
+            w.resetAndTrim(MAX_RETAINED_WRITER_BYTES);
+            endWrite();
+        }
     }
 
     public static <T> T parse(JsonCodec<T> codec, byte[] json) {
         beginRead();
+        JsonReader r = READER.get();
         try {
-            JsonReader r = READER.get().reset(json);
+            r.reset(json);
             T value = codec.read(r);
             r.requireEnd();
             return value;
-        } finally { endRead(); }
+        } finally {
+            r.releaseAfterUse(MAX_RETAINED_READER_CHARS);
+            endRead();
+        }
     }
 
     public static <T> T parse(JsonCodec<T> codec, byte[] json, int offset, int length) {
         beginRead();
+        JsonReader r = READER.get();
         try {
-            JsonReader r = READER.get().reset(json, offset, length);
+            r.reset(json, offset, length);
             T value = codec.read(r);
             r.requireEnd();
             return value;
-        } finally { endRead(); }
+        } finally {
+            r.releaseAfterUse(MAX_RETAINED_READER_CHARS);
+            endRead();
+        }
     }
 
     public static <T> T parse(JsonCodec<T> codec, String json) {
