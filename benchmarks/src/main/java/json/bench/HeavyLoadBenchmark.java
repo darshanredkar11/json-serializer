@@ -8,6 +8,7 @@ import json.example.User;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.MemoryType;
 import java.lang.management.MemoryUsage;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -103,7 +104,10 @@ public final class HeavyLoadBenchmark {
             checksum += result.checksum;
         }
 
+        long measuredGcCount = gcCount() - gcCountBefore;
+        long measuredGcTime = gcTime() - gcTimeBefore;
         long peakHeapUsed = ManagementFactory.getMemoryPoolMXBeans().stream()
+                .filter(pool -> pool.getType() == MemoryType.HEAP)
                 .map(MemoryPoolMXBean::getPeakUsage)
                 .filter(java.util.Objects::nonNull)
                 .mapToLong(MemoryUsage::getUsed).sum();
@@ -132,7 +136,7 @@ public final class HeavyLoadBenchmark {
                 library, operation, threadCount, bytes.length, processors, operations,
                 wallNanos / 1_000_000.0, throughput, allocatedPerOp, allocated,
                 oneCoreCpuPercent, machineCpuPercent,
-                gcCount() - gcCountBefore, gcTime() - gcTimeBefore,
+                measuredGcCount, measuredGcTime,
                 ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed(),
                 peakHeapUsed, retainedHeapAfterGc, maxHeap, peakRssKb(), checksum);
     }
