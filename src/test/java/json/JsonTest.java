@@ -168,7 +168,9 @@ public final class JsonTest {
 
             Object writer = threadLocalValue("WRITER");
             byte[] writerBuffer = (byte[]) field(JsonWriter.class, "buf").get(writer);
+            byte[] initialWriterBuffer = (byte[]) field(JsonWriter.class, "initialBuf").get(writer);
             eq(1024L, writerBuffer.length, "writer releases oversized buffer");
+            eq(true, writerBuffer == initialWriterBuffer, "writer reuses baseline buffer without reallocating");
 
             StringBuilder input = new StringBuilder(500_000);
             input.append("{\"unknown\":\"");
@@ -180,7 +182,9 @@ public final class JsonTest {
             Object reader = threadLocalValue("READER");
             eq(null, field(JsonReader.class, "buf").get(reader), "reader releases input array");
             char[] scratch = (char[]) field(JsonReader.class, "chars").get(reader);
+            char[] initialScratch = (char[]) field(JsonReader.class, "initialChars").get(reader);
             eq(64L, scratch.length, "reader trims oversized character scratch");
+            eq(true, scratch == initialScratch, "reader reuses baseline scratch without reallocating");
         } catch (ReflectiveOperationException e) {
             fail("memory retention inspection failed: " + e);
         }
