@@ -140,7 +140,16 @@ public final class JsonRecordProcessor extends AbstractProcessor {
         }
         sb.append("            r.beginObject();\n");
         sb.append("            while (r.nextKey()) {\n");
-        renderReadDispatch(sb, fields);
+        if (fields.size() >= 4) {
+            renderReadDispatch(sb, fields);
+        } else {
+            for (int i = 0; i < fields.size(); i++) {
+                FieldPlan f = fields.get(i);
+                sb.append("                ").append(i == 0 ? "if" : "else if").append(" (r.keyIs(").append(f.constantName).append(")) ")
+                  .append(f.readAssignment()).append("\\n");
+            }
+            sb.append("                else r.skipValue();\\n");
+        }
         sb.append("            }\n");
         sb.append("            return new ").append(simpleName).append("(");
         for (int i = 0; i < fields.size(); i++) {
@@ -163,13 +172,11 @@ public final class JsonRecordProcessor extends AbstractProcessor {
      */
     private void renderReadDispatch(StringBuilder sb, List<FieldPlan> fields) {
         java.util.Map<Integer, List<FieldPlan>> groups = new java.util.LinkedHashMap<>();
-        List<FieldPlan> fallback = new ArrayList<>();
         for (FieldPlan field : fields) {
-            if (field.wireName.chars().allMatch(c -> c < 0x80)) {
-                groups.computeIfAbsent(field.wireName.hashCode(), ignored -> new ArrayList<>()).add(field);
-            } else {
-                fallback.add(field);
-            }
+            int hash = field.wireName.chars().allMatch(c -> c < 0x80) ? field.wireName.hashCode() : -1;
+            // -1 is the runtime sentinel for escaped/non-ASCII input; keep it
+            // on the semantic fallback path even if an ASCII name hashes to -1.
+            if (hash != -1) groups.computeIfAbsent(hash, ignored -> new ArrayList<>()).add(field);
         }
         sb.append("                int keyHash = r.keyHash();\\n");
         sb.append("                switch (keyHash) {\\n");
@@ -187,13 +194,17 @@ public final class JsonRecordProcessor extends AbstractProcessor {
             sb.append("                    }\\n");
         }
         sb.append("                    case -1: {\\n");
-        for (int i = 0; i < fields.size(); i++) {
-            FieldPlan field = fields.get(i);
-            sb.append("                        ").append(i == 0 ? "if" : "else if")
-              .append(" (r.keyIs(").append(field.constantName).append(")) ")
-              .append(field.readAssignment()).append("\\n");
+        if (fields.isEmpty()) {
+            sb.append("                        r.skipValue();\\n");
+        } else {
+            for (int i = 0; i < fields.size(); i++) {
+                FieldPlan field = fields.get(i);
+                sb.append("                        ").append(i == 0 ? "if" : "else if")
+                  .append(" (r.keyIs(").append(field.constantName).append(")) ")
+                  .append(field.readAssignment()).append("\\n");
+            }
+            sb.append("                        else r.skipValue();\\n");
         }
-        sb.append("                        else r.skipValue();\\n");
         sb.append("                        break;\\n");
         sb.append("                    }\\n");
         sb.append("                    default: r.skipValue();\\n");
