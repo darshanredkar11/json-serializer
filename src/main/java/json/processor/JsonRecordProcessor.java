@@ -236,7 +236,13 @@ public final class JsonRecordProcessor extends AbstractProcessor {
                 plan.javaType = typeName(type);
                 plan.defaultValue = "null";
                 plan.nullable = true;
-                plan.codecExpr = codecExpressionFor(type, component);
+                if (types.isSameType(type, stringType)) {
+                    // String has native reader/writer operations; avoid a
+                    // generic codec dispatch and redundant null check.
+                    plan.directString = true;
+                } else {
+                    plan.codecExpr = codecExpressionFor(type, component);
+                }
             }
         }
         return plan;
@@ -309,20 +315,27 @@ public final class JsonRecordProcessor extends AbstractProcessor {
         String primitiveAccessor; // set for primitives; null for reference types
         String codecExpr; // set for reference types; null for primitives
         boolean nullable;
+        boolean directString;
         Element element;
 
         String writeStatement(String indent) {
             if (primitiveAccessor != null) {
                 return indent + "w.name(" + constantName + ").value(value." + javaName + "());\n";
             }
-            return indent + "w.name(" + constantName + ");\n"
-                 + indent + "if (value." + javaName + "() == null) w.nullValue(); else " + codecExpr + ".write(w, value." + javaName + "());\n";
+            if (directString) {
+                return indent + "w.name(" + constantName + ").value(value." + javaName + "());\n";
+            }
+            String local = "v_" + localName;
+            return indent + javaType + " " + local + " = value." + javaName + "();\n"
+                 + indent + "w.name(" + constantName + ");\n"
+                 + indent + "if (" + local + " == null) w.nullValue(); else " + codecExpr + ".write(w, " + local + ");\n";
         }
 
         String readAssignment() {
             if (primitiveAccessor != null) {
                 return localName + " = r." + primitiveAccessor + "();";
             }
+            if (directString) return localName + " = r.readString();";
             return localName + " = r.isNull() ? null : " + codecExpr + ".read(r);";
         }
     }
