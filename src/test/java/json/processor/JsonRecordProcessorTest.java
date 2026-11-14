@@ -46,6 +46,7 @@ public final class JsonRecordProcessorTest {
         composedListOfNestedRecordsRoundTrips();
         generatedHashDispatchHandlesCollisionsAndEscapedNames();
         generatedStringsUseDirectRuntimeOperations();
+        generatedCollectionCodecsAreHoisted();
         unsupportedFieldTypeFailsCompilationClearly();
 
         System.out.println(checks + " checks, " + failures + " failures");
@@ -296,6 +297,31 @@ public final class JsonRecordProcessorTest {
             run.setAccessible(true);
             eq("OK", run.invoke(null), "direct generated String paths preserve null semantics");
         }
+    }
+
+
+    private static void generatedCollectionCodecsAreHoisted() throws Exception {
+        String source = """
+            package t;
+            import json.JsonRecord;
+            import java.util.List;
+
+            @JsonRecord
+            record Batch(List<String> tags, Status status, int count, boolean active) {}
+            enum Status { READY, DONE }
+            """;
+        Path outDir = compile(source);
+        String generated = Files.readString(outDir.resolve("t/BatchCodec.java"));
+        int codecDeclaration = generated.indexOf("public static final JsonCodec");
+        int collectionFactory = generated.indexOf("json.Codecs.listOf");
+        eq(true, collectionFactory >= 0 && collectionFactory < codecDeclaration,
+                "collection codec is constructed in generated static initialization");
+        eq(false, generated.substring(codecDeclaration).contains("json.Codecs.listOf"),
+                "collection codec factory is absent from request methods");
+        eq(true, generated.contains("C_tags.write(w, v_tags)"),
+                "generated writer reuses its static collection codec");
+        eq(true, generated.contains("C_tags.read(r)"),
+                "generated reader reuses its static collection codec");
     }
 
     private static void unsupportedFieldTypeFailsCompilationClearly() throws Exception {
