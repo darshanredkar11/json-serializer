@@ -55,7 +55,7 @@ public final class JsonReader {
         int hash = 0;
         for (int i = keyStart; i < keyEnd; i++) {
             int c = buf[i] & 0xff;
-            if (c == '\\\\' || c >= 0x80) return -1;
+            if (c == '\\' || c >= 0x80) return -1;
             hash = 31 * hash + c;
         }
         return hash;
