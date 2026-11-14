@@ -11,6 +11,10 @@ import org.openjdk.jmh.annotations.*;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
+@JsonRecord
+record WideRecord(int id, int f1, int f2, int f3, int f4, int f5,
+                  int f6, int f7, int f8, int f9, int f10, int f11) {}
+
 /** Isolates generated compile-time key dispatch against a linear codec baseline. */
 @State(Scope.Thread)
 @BenchmarkMode({Mode.Throughput, Mode.AverageTime})
@@ -19,10 +23,6 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 5, time = 1)
 @Fork(3)
 public class GeneratedDispatchBenchmark {
-
-    @JsonRecord
-    public record WideRecord(int id, int f1, int f2, int f3, int f4, int f5,
-                             int f6, int f7, int f8, int f9, int f10, int f11) {}
 
     private static final byte[] JSON = ("{\"id\":1,\"f1\":2,\"f2\":3,\"f3\":4,\"f4\":5,"
             + "\"f5\":6,\"f6\":7,\"f7\":8,\"f8\":9,\"f9\":10,\"f10\":11,\"f11\":12}")
