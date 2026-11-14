@@ -59,6 +59,13 @@ public final class JsonWriter {
     /** Clears the buffer for reuse, keeping the allocated capacity. */
     public JsonWriter reset() { pos = 0; comma = false; return this; }
 
+    /** Resets after a top-level operation and drops unusually large buffers. */
+    void resetAndTrim(int maxRetainedCapacity) {
+        pos = 0;
+        comma = false;
+        if (buf.length > maxRetainedCapacity) buf = new byte[1024];
+    }
+
     /** Number of bytes written so far. */
     public int size() { return pos; }
 
