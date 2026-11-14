@@ -121,6 +121,12 @@ public final class JsonRecordProcessor extends AbstractProcessor {
             sb.append("    private static final JsonField ").append(f.constantName)
               .append(" = JsonField.of(\"").append(escapeJava(f.wireName)).append("\");\n");
         }
+        for (FieldPlan f : fields) {
+            if (f.primitiveAccessor == null && !f.directString) {
+                sb.append("    private static final JsonCodec<").append(f.javaType).append("> C_")
+                  .append(f.javaName).append(" = ").append(f.codecExpr).append(";\n");
+            }
+        }
         sb.append("\n");
         sb.append("    public static final JsonCodec<").append(recordType).append("> CODEC = new JsonCodec<").append(recordType).append(">() {\n");
 
@@ -328,7 +334,7 @@ public final class JsonRecordProcessor extends AbstractProcessor {
             String local = "v_" + localName;
             return indent + javaType + " " + local + " = value." + javaName + "();\n"
                  + indent + "w.name(" + constantName + ");\n"
-                 + indent + "if (" + local + " == null) w.nullValue(); else " + codecExpr + ".write(w, " + local + ");\n";
+                 + indent + "if (" + local + " == null) w.nullValue(); else C_" + javaName + ".write(w, " + local + ");\n";
         }
 
         String readAssignment() {
@@ -336,7 +342,7 @@ public final class JsonRecordProcessor extends AbstractProcessor {
                 return localName + " = r." + primitiveAccessor + "();";
             }
             if (directString) return localName + " = r.readString();";
-            return localName + " = r.isNull() ? null : " + codecExpr + ".read(r);";
+            return localName + " = r.isNull() ? null : C_" + javaName + ".read(r);";
         }
     }
 
