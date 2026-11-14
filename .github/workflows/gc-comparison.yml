@@ -49,10 +49,12 @@ jobs:
             parallel) JVM_ARGS="-Xms1g -Xmx1g -XX:+UseParallelGC" ;;
             zgc-generational) JVM_ARGS="-Xms1g -Xmx1g -XX:+UseZGC -XX:+ZGenerational" ;;
           esac
-          java -jar target/benchmarks.jar 'json.bench.GeneratedDispatchBenchmark.*' \
-            -t 1,4 -f 3 -wi 3 -i 4 -w 1s -r 1s -prof gc \
-            -jvmArgsAppend "$JVM_ARGS" \
-            -rf json -rff "results/${{ matrix.collector }}.json"
+          for threads in 1 4; do
+            java -jar target/benchmarks.jar 'json.bench.GeneratedDispatchBenchmark.*' \
+              -t "$threads" -f 3 -wi 3 -i 4 -w 1s -r 1s -prof gc \
+              -jvmArgsAppend "$JVM_ARGS" \
+              -rf json -rff "results/${{ matrix.collector }}-${threads}t.json"
+          done
 
       - name: Upload collector results
         uses: actions/upload-artifact@v4
