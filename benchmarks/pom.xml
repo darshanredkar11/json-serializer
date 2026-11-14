@@ -52,6 +52,11 @@
               <artifactId>jmh-generator-annprocess</artifactId>
               <version>${jmh.version}</version>
             </path>
+            <path>
+              <groupId>io.github.darshanredkar11</groupId>
+              <artifactId>json-serializer</artifactId>
+              <version>${project.version}</version>
+            </path>
           </annotationProcessorPaths>
         </configuration>
       </plugin>
