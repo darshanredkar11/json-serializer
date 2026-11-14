@@ -1,5 +1,6 @@
 package json.bench;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import json.Json;
@@ -30,7 +31,8 @@ public class GeneratedRecordBenchmark {
     @Setup(Level.Trial)
     public void setup() throws Exception {
         value = new WideRecord("alpha", 17, 1234567890123L, 19.25, true, "omega", 42, 8);
-        jackson = new ObjectMapper();
+        jackson = new ObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         gson = new Gson();
         jsonText = """
                 {"f7":8,"unknownNumber":12345678901234567890.123e-7,

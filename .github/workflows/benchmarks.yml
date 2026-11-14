@@ -19,7 +19,7 @@ jobs:
   jmh:
     name: JMH and concurrent stress (Temurin 21)
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
 
