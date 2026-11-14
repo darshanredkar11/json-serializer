@@ -8,7 +8,8 @@ public final class JsonReader {
     private static final double[] POW10 = {1e0,1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8,1e9,1e10,1e11,1e12,1e13,1e14,1e15,1e16,1e17,1e18,1e19,1e20,1e21,1e22};
     private byte[] buf;
     private int pos, end, keyStart, keyEnd;
-    private char[] chars = new char[64];
+    private final char[] initialChars = new char[64];
+    private char[] chars = initialChars;
 
     public JsonReader() { this(new byte[0],0,0); }
     public JsonReader(byte[] data) { this(data,0,data.length); }
@@ -25,7 +26,7 @@ public final class JsonReader {
     void releaseAfterUse(int maxRetainedChars) {
         buf = null;
         pos = end = keyStart = keyEnd = 0;
-        if (chars.length > maxRetainedChars) chars = new char[64];
+        if (chars.length > maxRetainedChars) chars = initialChars;
     }
 
     public void beginObject() { expect('{'); }
@@ -42,6 +43,22 @@ public final class JsonReader {
         if(p>=end) throw errorAt("unterminated field name",p);
         keyEnd=p; pos=p+1; if(peek()!=':') throw error("expected ':'"); pos++;
         return true;
+    }
+
+
+    /**
+     * Returns the Java String hash of an unescaped ASCII field name, or -1
+     * when decoding is required. Generated codecs use this to dispatch known
+     * keys with a compile-time switch instead of a linear comparison chain.
+     */
+    public int keyHash() {
+        int hash = 0;
+        for (int i = keyStart; i < keyEnd; i++) {
+            int c = buf[i] & 0xff;
+            if (c == '\\' || c >= 0x80) return -1;
+            hash = 31 * hash + c;
+        }
+        return hash;
     }
 
     /** Fast raw-byte match for ordinary keys; escaped keys are decoded for semantic equality. */
@@ -122,9 +139,46 @@ public final class JsonReader {
         if(c=='t')expectLiteral("true");
         else if(c=='f')expectLiteral("false");
         else if(c=='n')expectLiteral("null");
-        else if(c=='-'||(c>='0'&&c<='9')){int s=pos;while(pos<end){byte x=buf[pos];if(x==','||x=='}'||x==']'||x<=0x20)break;pos++;}String n=new String(buf,s,pos-s,StandardCharsets.US_ASCII);try{Double.parseDouble(n);}catch(NumberFormatException e){throw error("invalid number");}}
+        else if(c=='-'||(c>='0'&&c<='9')) skipNumber();
         else throw error("invalid value");
         ensureValueDelimiter();
+    }
+
+    /**
+     * Consumes and validates a JSON number without constructing a temporary String
+     * or parsing a floating-point value. Unknown fields only need grammar validation.
+     */
+    private void skipNumber() {
+        int p = pos;
+        if (buf[p] == '-') p++;
+        if (p >= end) throw errorAt("expected a number", p);
+
+        if (buf[p] == '0') {
+            p++;
+            if (p < end && buf[p] >= '0' && buf[p] <= '9')
+                throw errorAt("leading zero in number", p);
+        } else if (buf[p] >= '1' && buf[p] <= '9') {
+            do { p++; } while (p < end && buf[p] >= '0' && buf[p] <= '9');
+        } else {
+            throw errorAt("expected a number", p);
+        }
+
+        if (p < end && buf[p] == '.') {
+            p++;
+            int fractionStart = p;
+            while (p < end && buf[p] >= '0' && buf[p] <= '9') p++;
+            if (p == fractionStart) throw errorAt("digits required after decimal point", p);
+        }
+
+        if (p < end && (buf[p] == 'e' || buf[p] == 'E')) {
+            p++;
+            if (p < end && (buf[p] == '+' || buf[p] == '-')) p++;
+            int exponentStart = p;
+            while (p < end && buf[p] >= '0' && buf[p] <= '9') p++;
+            if (p == exponentStart) throw errorAt("digits required after exponent", p);
+        }
+
+        pos = p;
     }
 
     /** Requires that only JSON whitespace remains. Used by Json.parse to enforce one complete document. */

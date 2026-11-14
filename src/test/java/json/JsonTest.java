@@ -203,6 +203,13 @@ public final class JsonTest {
                     + "\"other\":[[[]]],\"junk\":12.5,\"flag\":true,\"id\":99}";
         eq(99L, Json.parse(User.CODEC, json).id, "skip nested unknown fields");
         eq(1L, Json.parse(User.CODEC, "{\"skip\":\"esc \\\" } \",\"id\":1}").id, "skip escaped quote");
+        eq(7L, Json.parse(User.CODEC, "{\"junk\":[-0,0.25,1e+9,2E-3],\"id\":7}").id,
+                "skip valid JSON number grammar without parsing values");
+        throwsJson("{\"junk\":01,\"id\":1}", "skip rejects leading zero");
+        throwsJson("{\"junk\":1.,\"id\":1}", "skip rejects empty fraction");
+        throwsJson("{\"junk\":1e,\"id\":1}", "skip rejects empty exponent");
+        throwsJson("{\"junk\":+1,\"id\":1}", "skip rejects leading plus");
+        throwsJson("{\"junk\":1x,\"id\":1}", "skip rejects invalid number suffix");
     }
 
     private static void errors() {
