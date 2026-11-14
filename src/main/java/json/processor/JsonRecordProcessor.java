@@ -146,9 +146,9 @@ public final class JsonRecordProcessor extends AbstractProcessor {
             for (int i = 0; i < fields.size(); i++) {
                 FieldPlan f = fields.get(i);
                 sb.append("                ").append(i == 0 ? "if" : "else if").append(" (r.keyIs(").append(f.constantName).append(")) ")
-                  .append(f.readAssignment()).append("\\n");
+                  .append(f.readAssignment()).append("\n");
             }
-            sb.append("                else r.skipValue();\\n");
+            sb.append("                else r.skipValue();\n");
         }
         sb.append("            }\n");
         sb.append("            return new ").append(simpleName).append("(");
@@ -178,37 +178,37 @@ public final class JsonRecordProcessor extends AbstractProcessor {
             // on the semantic fallback path even if an ASCII name hashes to -1.
             if (hash != -1) groups.computeIfAbsent(hash, ignored -> new ArrayList<>()).add(field);
         }
-        sb.append("                int keyHash = r.keyHash();\\n");
-        sb.append("                switch (keyHash) {\\n");
+        sb.append("                int keyHash = r.keyHash();\n");
+        sb.append("                switch (keyHash) {\n");
         for (java.util.Map.Entry<Integer, List<FieldPlan>> entry : groups.entrySet()) {
-            sb.append("                    case ").append(entry.getKey()).append(": {\\n");
+            sb.append("                    case ").append(entry.getKey()).append(": {\n");
             List<FieldPlan> candidates = entry.getValue();
             for (int i = 0; i < candidates.size(); i++) {
                 FieldPlan field = candidates.get(i);
                 sb.append("                        ").append(i == 0 ? "if" : "else if")
                   .append(" (r.keyIs(").append(field.constantName).append(")) ")
-                  .append(field.readAssignment()).append("\\n");
+                  .append(field.readAssignment()).append("\n");
             }
-            sb.append("                        else r.skipValue();\\n");
-            sb.append("                        break;\\n");
-            sb.append("                    }\\n");
+            sb.append("                        else r.skipValue();\n");
+            sb.append("                        break;\n");
+            sb.append("                    }\n");
         }
-        sb.append("                    case -1: {\\n");
+        sb.append("                    case -1: {\n");
         if (fields.isEmpty()) {
-            sb.append("                        r.skipValue();\\n");
+            sb.append("                        r.skipValue();\n");
         } else {
             for (int i = 0; i < fields.size(); i++) {
                 FieldPlan field = fields.get(i);
                 sb.append("                        ").append(i == 0 ? "if" : "else if")
                   .append(" (r.keyIs(").append(field.constantName).append(")) ")
-                  .append(field.readAssignment()).append("\\n");
+                  .append(field.readAssignment()).append("\n");
             }
-            sb.append("                        else r.skipValue();\\n");
+            sb.append("                        else r.skipValue();\n");
         }
-        sb.append("                        break;\\n");
-        sb.append("                    }\\n");
-        sb.append("                    default: r.skipValue();\\n");
-        sb.append("                }\\n");
+        sb.append("                        break;\n");
+        sb.append("                    }\n");
+        sb.append("                    default: r.skipValue();\n");
+        sb.append("                }\n");
     }
 
     // ------------------------------------------------------------------ per-field planning
