@@ -1,6 +1,7 @@
 package json;
 
 import java.nio.charset.StandardCharsets;
+import java.lang.reflect.Field;
 import java.util.Arrays;
 
 import json.example.User;
@@ -17,6 +18,7 @@ public final class JsonTest {
         strings();
         numbers();
         parsing();
+        memoryRetention();
         skipping();
         errors();
 
@@ -154,6 +156,46 @@ public final class JsonTest {
         // Offset/length parsing over a shared buffer.
         byte[] framed = "XXXX{\"id\":5}YYYY".getBytes(StandardCharsets.UTF_8);
         eq(5L, Json.parse(User.CODEC, framed, 4, 8).id, "offset parse");
+    }
+
+    /** Large one-off documents must not remain pinned to a long-lived worker thread. */
+    private static void memoryRetention() {
+        try {
+            User large = sample();
+            large.name = "x".repeat(1_100_000);
+            byte[] encoded = Json.toBytes(User.CODEC, large);
+            eq(true, encoded.length > 1_000_000, "large writer fixture");
+
+            Object writer = threadLocalValue("WRITER");
+            byte[] writerBuffer = (byte[]) field(JsonWriter.class, "buf").get(writer);
+            eq(1024L, writerBuffer.length, "writer releases oversized buffer");
+
+            StringBuilder input = new StringBuilder(500_000);
+            input.append("{\"unknown\":\"");
+            for (int i = 0; i < 70_000; i++) input.append("\\\\u0061");
+            input.append("\",\"id\":9}");
+            byte[] json = input.toString().getBytes(StandardCharsets.UTF_8);
+            eq(9L, Json.parse(User.CODEC, json).id, "large escaped unknown field parses");
+
+            Object reader = threadLocalValue("READER");
+            eq(null, field(JsonReader.class, "buf").get(reader), "reader releases input array");
+            char[] scratch = (char[]) field(JsonReader.class, "chars").get(reader);
+            eq(64L, scratch.length, "reader trims oversized character scratch");
+        } catch (ReflectiveOperationException e) {
+            fail("memory retention inspection failed: " + e);
+        }
+    }
+
+    private static Object threadLocalValue(String name) throws ReflectiveOperationException {
+        Field f = Json.class.getDeclaredField(name);
+        f.setAccessible(true);
+        return ((ThreadLocal<?>) f.get(null)).get();
+    }
+
+    private static Field field(Class<?> type, String name) throws ReflectiveOperationException {
+        Field f = type.getDeclaredField(name);
+        f.setAccessible(true);
+        return f;
     }
 
     private static void skipping() {
