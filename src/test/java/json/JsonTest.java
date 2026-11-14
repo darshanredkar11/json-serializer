@@ -207,6 +207,7 @@ public final class JsonTest {
                     + "\"other\":[[[]]],\"junk\":12.5,\"flag\":true,\"id\":99}";
         eq(99L, Json.parse(User.CODEC, json).id, "skip nested unknown fields");
         eq(1L, Json.parse(User.CODEC, "{\"skip\":\"esc \\\" } \",\"id\":1}").id, "skip escaped quote");
+        eq(7L, Json.parse(User.CODEC, "{\"unknown\":-12.5e+3,\"id\":7}").id, "skip numeric exponent without decoding");
     }
 
     private static void errors() {
