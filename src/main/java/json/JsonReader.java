@@ -139,13 +139,47 @@ public final class JsonReader {
         if(c=='t')expectLiteral("true");
         else if(c=='f')expectLiteral("false");
         else if(c=='n')expectLiteral("null");
-        else if(c=='-'||(c>='0'&&c<='9')){int s=pos;while(pos<end){byte x=buf[pos];if(x==','||x=='}'||x==']'||x<=0x20)break;pos++;}String n=new String(buf,s,pos-s,StandardCharsets.US_ASCII);try{Double.parseDouble(n);}catch(NumberFormatException e){throw error("invalid number");}}
+        else if(c=='-'||(c>='0'&&c<='9')){ skipNumber(); return; }
         else throw error("invalid value");
         ensureValueDelimiter();
     }
 
     /** Requires that only JSON whitespace remains. Used by Json.parse to enforce one complete document. */
     public void requireEnd(){ while(pos<end){byte c=buf[pos];if(c==' '||c=='\n'||c=='\r'||c=='\t'){pos++;continue;}throw error("trailing data");} }
+
+
+    /** Validates JSON number grammar without materialising a temporary String. */
+    private void skipNumber() {
+        if (buf[pos] == '-') {
+            pos++;
+            if (pos >= end) throw errorAt("invalid number", pos);
+        }
+        if (buf[pos] == '0') {
+            pos++;
+            if (pos < end && buf[pos] >= '0' && buf[pos] <= '9') {
+                throw errorAt("leading zero in number", pos);
+            }
+        } else if (buf[pos] >= '1' && buf[pos] <= '9') {
+            do { pos++; } while (pos < end && buf[pos] >= '0' && buf[pos] <= '9');
+        } else {
+            throw errorAt("invalid number", pos);
+        }
+
+        if (pos < end && buf[pos] == '.') {
+            pos++;
+            int fractionStart = pos;
+            while (pos < end && buf[pos] >= '0' && buf[pos] <= '9') pos++;
+            if (pos == fractionStart) throw errorAt("digits required after decimal point", pos);
+        }
+        if (pos < end && (buf[pos] == 'e' || buf[pos] == 'E')) {
+            pos++;
+            if (pos < end && (buf[pos] == '+' || buf[pos] == '-')) pos++;
+            int exponentStart = pos;
+            while (pos < end && buf[pos] >= '0' && buf[pos] <= '9') pos++;
+            if (pos == exponentStart) throw errorAt("digits required after exponent", pos);
+        }
+        ensureValueDelimiter();
+    }
 
     private void ensureValueDelimiter(){ if(pos>=end)return; byte c=buf[pos]; if(c!='}'&&c!=']'&&c!=','&&c!=' '&&c!='\n'&&c!='\r'&&c!='\t') throw error("unexpected character after value"); }
 
