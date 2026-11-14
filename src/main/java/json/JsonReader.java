@@ -21,6 +21,13 @@ public final class JsonReader {
     }
     public JsonReader reset(byte[] data) { return reset(data,0,data.length); }
 
+    /** Releases the completed document and bounds reusable scratch memory. */
+    void releaseAfterUse(int maxRetainedChars) {
+        buf = null;
+        pos = end = keyStart = keyEnd = 0;
+        if (chars.length > maxRetainedChars) chars = new char[64];
+    }
+
     public void beginObject() { expect('{'); }
     public void beginArray() { expect('['); }
 
