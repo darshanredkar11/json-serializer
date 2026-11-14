@@ -140,12 +140,7 @@ public final class JsonRecordProcessor extends AbstractProcessor {
         }
         sb.append("            r.beginObject();\n");
         sb.append("            while (r.nextKey()) {\n");
-        for (int i = 0; i < fields.size(); i++) {
-            FieldPlan f = fields.get(i);
-            sb.append("                ").append(i == 0 ? "if" : "else if").append(" (r.keyIs(").append(f.constantName).append(")) ")
-              .append(f.readAssignment()).append("\n");
-        }
-        sb.append("                else r.skipValue();\n");
+        renderReadDispatch(sb, fields);
         sb.append("            }\n");
         sb.append("            return new ").append(simpleName).append("(");
         for (int i = 0; i < fields.size(); i++) {
@@ -157,6 +152,52 @@ public final class JsonRecordProcessor extends AbstractProcessor {
         sb.append("    };\n");
         sb.append("}\n");
         return sb.toString();
+    }
+
+    
+    /**
+     * Emits a hash switch for ordinary ASCII keys. Hashes and collision groups
+     * are resolved by the processor, so the runtime performs one byte scan and
+     * one switch rather than testing every schema field. Escaped/non-ASCII keys
+     * retain the semantic-equality fallback.
+     */
+    private void renderReadDispatch(StringBuilder sb, List<FieldPlan> fields) {
+        java.util.Map<Integer, List<FieldPlan>> groups = new java.util.LinkedHashMap<>();
+        List<FieldPlan> fallback = new ArrayList<>();
+        for (FieldPlan field : fields) {
+            if (field.wireName.chars().allMatch(c -> c < 0x80)) {
+                groups.computeIfAbsent(field.wireName.hashCode(), ignored -> new ArrayList<>()).add(field);
+            } else {
+                fallback.add(field);
+            }
+        }
+        sb.append("                int keyHash = r.keyHash();\\n");
+        sb.append("                switch (keyHash) {\\n");
+        for (java.util.Map.Entry<Integer, List<FieldPlan>> entry : groups.entrySet()) {
+            sb.append("                    case ").append(entry.getKey()).append(": {\\n");
+            List<FieldPlan> candidates = entry.getValue();
+            for (int i = 0; i < candidates.size(); i++) {
+                FieldPlan field = candidates.get(i);
+                sb.append("                        ").append(i == 0 ? "if" : "else if")
+                  .append(" (r.keyIs(").append(field.constantName).append(")) ")
+                  .append(field.readAssignment()).append("\\n");
+            }
+            sb.append("                        else r.skipValue();\\n");
+            sb.append("                        break;\\n");
+            sb.append("                    }\\n");
+        }
+        sb.append("                    case -1: {\\n");
+        for (int i = 0; i < fields.size(); i++) {
+            FieldPlan field = fields.get(i);
+            sb.append("                        ").append(i == 0 ? "if" : "else if")
+              .append(" (r.keyIs(").append(field.constantName).append(")) ")
+              .append(field.readAssignment()).append("\\n");
+        }
+        sb.append("                        else r.skipValue();\\n");
+        sb.append("                        break;\\n");
+        sb.append("                    }\\n");
+        sb.append("                    default: r.skipValue();\\n");
+        sb.append("                }\\n");
     }
 
     // ------------------------------------------------------------------ per-field planning
