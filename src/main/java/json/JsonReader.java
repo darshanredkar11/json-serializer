@@ -139,8 +139,46 @@ public final class JsonReader {
         if(c=='t')expectLiteral("true");
         else if(c=='f')expectLiteral("false");
         else if(c=='n')expectLiteral("null");
-        else if(c=='-'||(c>='0'&&c<='9')){int s=pos;while(pos<end){byte x=buf[pos];if(x==','||x=='}'||x==']'||x<=0x20)break;pos++;}String n=new String(buf,s,pos-s,StandardCharsets.US_ASCII);try{Double.parseDouble(n);}catch(NumberFormatException e){throw error("invalid number");}}
+        else if(c=='-'||(c>='0'&&c<='9')) skipNumber();
         else throw error("invalid value");
+        ensureValueDelimiter();
+    }
+
+    /**
+     * Consumes and validates a JSON number without constructing a temporary String
+     * or parsing a floating-point value. Unknown fields only need grammar validation.
+     */
+    private void skipNumber() {
+        int p = pos;
+        if (buf[p] == '-') p++;
+        if (p >= end) throw errorAt("expected a number", p);
+
+        if (buf[p] == '0') {
+            p++;
+            if (p < end && buf[p] >= '0' && buf[p] <= '9')
+                throw errorAt("leading zero in number", p);
+        } else if (buf[p] >= '1' && buf[p] <= '9') {
+            do { p++; } while (p < end && buf[p] >= '0' && buf[p] <= '9');
+        } else {
+            throw errorAt("expected a number", p);
+        }
+
+        if (p < end && buf[p] == '.') {
+            p++;
+            int fractionStart = p;
+            while (p < end && buf[p] >= '0' && buf[p] <= '9') p++;
+            if (p == fractionStart) throw errorAt("digits required after decimal point", p);
+        }
+
+        if (p < end && (buf[p] == 'e' || buf[p] == 'E')) {
+            p++;
+            if (p < end && (buf[p] == '+' || buf[p] == '-')) p++;
+            int exponentStart = p;
+            while (p < end && buf[p] >= '0' && buf[p] <= '9') p++;
+            if (p == exponentStart) throw errorAt("digits required after exponent", p);
+        }
+
+        pos = p;
         ensureValueDelimiter();
     }
 
