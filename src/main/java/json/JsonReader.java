@@ -179,7 +179,6 @@ public final class JsonReader {
         }
 
         pos = p;
-        ensureValueDelimiter();
     }
 
     /** Requires that only JSON whitespace remains. Used by Json.parse to enforce one complete document. */
