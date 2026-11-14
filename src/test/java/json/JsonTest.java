@@ -217,6 +217,8 @@ public final class JsonTest {
         throwsJson("{\"id\":tru}", "bad literal");
         throwsJson("{\"name\":\"unterminated", "unterminated string");
         throwsJson("{\"score\":abc}", "not a number");
+        throwsJson("{\"unknown\":01,\"id\":1}", "leading zero in skipped number");
+        throwsJson("{\"unknown\":1e+,\"id\":1}", "invalid exponent in skipped number");
     }
 
     // ------------------------------------------------------------------ util
