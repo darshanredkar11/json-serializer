@@ -32,11 +32,12 @@ public class GeneratedRecordBenchmark {
         value = new WideRecord("alpha", 17, 1234567890123L, 19.25, true, "omega", 42, 8);
         jackson = new ObjectMapper();
         gson = new Gson();
-        jsonBytes = ("{\\"f7\\":8,\\"unknownNumber\\":12345678901234567890.123e-7,"
-                + "\\"f5\\":\\"omega\\",\\"f4\\":true,\\"f3\\":19.25,"
-                + "\\"f2\\":1234567890123,\\"f1\\":17,\\"f0\\":\\"alpha\\",\\"f6\\":42}")
-                .getBytes(StandardCharsets.UTF_8);
-        jsonText = new String(jsonBytes, StandardCharsets.UTF_8);
+        jsonText = """
+                {"f7":8,"unknownNumber":12345678901234567890.123e-7,
+                 "f5":"omega","f4":true,"f3":19.25,
+                 "f2":1234567890123,"f1":17,"f0":"alpha","f6":42}
+                """;
+        jsonBytes = jsonText.getBytes(StandardCharsets.UTF_8);
         if (!value.equals(Json.parse(WideRecordCodec.CODEC, jsonBytes))
                 || !value.equals(jackson.readValue(jsonBytes, WideRecord.class))
                 || !value.equals(gson.fromJson(jsonText, WideRecord.class))) {
