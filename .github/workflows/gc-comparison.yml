@@ -1,0 +1,63 @@
+name: Serializer GC comparison
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "benchmark/**"
+    paths:
+      - "src/main/java/**"
+      - "benchmarks/**"
+      - ".github/workflows/gc-comparison.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  gc-matrix:
+    name: Generated dispatch under G1, Parallel and Generational ZGC
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        collector: [g1, parallel, zgc-generational]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build serializer and benchmark harness
+        run: |
+          mvn --batch-mode --no-transfer-progress clean install
+          cd benchmarks
+          mvn --batch-mode --no-transfer-progress clean package
+
+      - name: Run generated dispatch benchmark with GC profiler
+        working-directory: benchmarks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          case "${{ matrix.collector }}" in
+            g1) JVM_ARGS="-Xms1g -Xmx1g -XX:+UseG1GC" ;;
+            parallel) JVM_ARGS="-Xms1g -Xmx1g -XX:+UseParallelGC" ;;
+            zgc-generational) JVM_ARGS="-Xms1g -Xmx1g -XX:+UseZGC -XX:+ZGenerational" ;;
+          esac
+          java -jar target/benchmarks.jar 'json.bench.GeneratedDispatchBenchmark.*' \
+            -t 1,4 -f 3 -wi 3 -i 4 -w 1s -r 1s -prof gc \
+            -jvmArgsAppend "$JVM_ARGS" \
+            -rf json -rff "results/${{ matrix.collector }}.json"
+
+      - name: Upload collector results
+        uses: actions/upload-artifact@v4
+        with:
+          name: serializer-gc-${{ matrix.collector }}
+          path: benchmarks/results/
+          if-no-files-found: error
+          retention-days: 90
