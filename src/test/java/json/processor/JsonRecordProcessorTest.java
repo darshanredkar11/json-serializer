@@ -239,7 +239,7 @@ public final class JsonRecordProcessorTest {
             @JsonRecord
             record Dispatch(@JsonName("Aa") int first,
                             @JsonName("BB") int second,
-                            @JsonName("café") int unicode,
+                            "{\"Aa\":1,\"BB\":2,\"café\":3,\"tail\":4}");
                             int tail) {}
 
             final class Runner {
