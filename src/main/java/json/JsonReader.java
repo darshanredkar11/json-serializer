@@ -7,6 +7,8 @@ import java.util.Arrays;
 public final class JsonReader {
     private byte[] buf;
     private int pos, end, keyStart, keyEnd;
+    private String decodedKey;
+    private int decodedKeyStart = -1, decodedKeyEnd = -1;
     private final char[] initialChars = new char[64];
     private char[] chars = initialChars;
 
@@ -17,7 +19,9 @@ public final class JsonReader {
     public JsonReader reset(byte[] data,int offset,int length) {
         if (data == null) throw new NullPointerException("data");
         if (offset < 0 || length < 0 || offset > data.length - length) throw new IndexOutOfBoundsException("offset/length");
-        buf=data; pos=offset; end=offset+length; keyStart=keyEnd=pos; return this;
+        buf=data; pos=offset; end=offset+length; keyStart=keyEnd=pos;
+        decodedKey=null; decodedKeyStart=decodedKeyEnd=-1;
+        return this;
     }
     public JsonReader reset(byte[] data) { return reset(data,0,data.length); }
 
@@ -26,6 +30,7 @@ public final class JsonReader {
         buf = null;
         pos = end = keyStart = keyEnd = 0;
         if (chars.length > maxRetainedChars) chars = initialChars;
+        decodedKey=null; decodedKeyStart=decodedKeyEnd=-1;
     }
 
     public void beginObject() { expect('{'); }
@@ -37,6 +42,7 @@ public final class JsonReader {
         if(c==',') { pos++; c=peek(); if(c=='}') throw error("trailing comma in object"); }
         if(c!='"') throw error("expected a field name");
         pos++; keyStart=pos;
+        decodedKey=null; decodedKeyStart=decodedKeyEnd=-1;
         int p=pos;
         while(p<end){ byte x=buf[p]; if(x=='"') break; if(x=='\\'){ p++; if(p>=end) throw errorAt("unterminated field name",p); } else if((x&0xff)<0x20) throw errorAt("control character in field name",p); p++; }
         if(p>=end) throw errorAt("unterminated field name",p);
@@ -65,10 +71,20 @@ public final class JsonReader {
         byte[] name=field.name;
         if(keyEnd-keyStart==name.length && Arrays.equals(buf,keyStart,keyEnd,name,0,name.length)) return true;
         if(indexOfEscapeOrNonAscii(keyStart,keyEnd)<0) return false;
-        return key().equals(field.toString());
+        return decodedKey().equals(field.toString());
     }
 
     private int indexOfEscapeOrNonAscii(int s,int e){ for(int i=s;i<e;i++){int x=buf[i]&0xff;if(x=='\\'||x>=0x80)return i;} return -1; }
+
+    /** Decodes an escaped/non-ASCII key at most once for the current field. */
+    private String decodedKey() {
+        if (decodedKey == null || decodedKeyStart != keyStart || decodedKeyEnd != keyEnd) {
+            decodedKey = decodeStringRange(keyStart, keyEnd);
+            decodedKeyStart = keyStart;
+            decodedKeyEnd = keyEnd;
+        }
+        return decodedKey;
+    }
 
     public String key() {
         int special=indexOfEscapeOrNonAscii(keyStart,keyEnd);
