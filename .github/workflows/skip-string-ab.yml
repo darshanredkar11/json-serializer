@@ -1,0 +1,93 @@
+name: Unknown string skip baseline vs candidate
+
+on:
+  push:
+    branches:
+      - "benchmark/skip-string-ab"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  skip-string-ab:
+    name: Unknown-string skip A/B (Temurin 21)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 850d1469a090340be4ac88f23fc6b5fda511f337
+          path: baseline
+
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          ref: a5d5bac18715d398b226368c7b2158f50f6efec6
+          path: candidate
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Capture environment
+        run: |
+          mkdir -p results
+          {
+            echo "UTC: $(date -u +%FT%TZ)"
+            echo "Baseline: 850d1469a090340be4ac88f23fc6b5fda511f337"
+            echo "Candidate: a5d5bac18715d398b226368c7b2158f50f6efec6"
+            java -version 2>&1
+            uname -a
+            lscpu
+            free -h
+          } > results/environment.txt
+
+      - name: Build baseline serializer and benchmark harness
+        run: |
+          set -euo pipefail
+          mvn --batch-mode --no-transfer-progress -f baseline/pom.xml clean install
+          mvn --batch-mode --no-transfer-progress -f candidate/benchmarks/pom.xml clean package
+
+      - name: Run baseline unknown-string benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          for threads in 1 4; do
+            java -Xms2g -Xmx2g -jar candidate/benchmarks/target/benchmarks.jar \
+              'json.bench.UnknownStringSkipBenchmark' \
+              -p kind=ascii,utf8,escaped -t "$threads" -f 3 -wi 3 -i 5 \
+              -w 1s -r 1s -prof gc -rf json \
+              -rff "results/baseline-${threads}t.json"
+          done
+
+      - name: Build candidate serializer and benchmark harness
+        run: |
+          set -euo pipefail
+          mvn --batch-mode --no-transfer-progress -f candidate/pom.xml clean install
+          mvn --batch-mode --no-transfer-progress -f candidate/benchmarks/pom.xml clean package
+
+      - name: Run candidate unknown-string benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          for threads in 1 4; do
+            java -Xms2g -Xmx2g -jar candidate/benchmarks/target/benchmarks.jar \
+              'json.bench.UnknownStringSkipBenchmark' \
+              -p kind=ascii,utf8,escaped -t "$threads" -f 3 -wi 3 -i 5 \
+              -w 1s -r 1s -prof gc -rf json \
+              -rff "results/candidate-${threads}t.json"
+          done
+
+      - name: Upload matched results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unknown-string-skip-ab-java21
+          path: results/
+          if-no-files-found: error
+          retention-days: 90
