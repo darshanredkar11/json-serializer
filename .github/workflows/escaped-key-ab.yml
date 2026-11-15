@@ -24,7 +24,7 @@ jobs:
       - name: Checkout candidate
         uses: actions/checkout@v4
         with:
-          ref: 556775d22f6c70b8a31dc657a4ff9022080d6d8a
+          ref: d9dc3bc0ccfe14016443d1c9e442eb78860b86f9
           path: candidate
 
       - name: Set up Java 21
@@ -40,7 +40,7 @@ jobs:
           {
             echo "UTC: $(date -u +%FT%TZ)"
             echo "Baseline: a9840cb5a98f0482fbd41149837318ebae02cf20"
-            echo "Candidate: 556775d22f6c70b8a31dc657a4ff9022080d6d8a"
+            echo "Candidate: d9dc3bc0ccfe14016443d1c9e442eb78860b86f9"
             java -version 2>&1
             uname -a
             lscpu
