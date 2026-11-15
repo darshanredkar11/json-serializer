@@ -203,6 +203,12 @@ public final class JsonTest {
                     + "\"other\":[[[]]],\"junk\":12.5,\"flag\":true,\"id\":99}";
         eq(99L, Json.parse(User.CODEC, json).id, "skip nested unknown fields");
         eq(1L, Json.parse(User.CODEC, "{\"skip\":\"esc \\\" } \",\"id\":1}").id, "skip escaped quote");
+        eq(2L, Json.parse(User.CODEC, "{\"discard\":\"café 你 🚀\",\"id\":2}").id,
+                "skip UTF-8 string without materialising it");
+        throwsJson("{\"discard\":\"bad " + '\\' + "q escape\",\"id\":1}", "skip rejects invalid string escape");
+        throwsJson("{\"discard\":\"bad " + '\\' + "u12xz\",\"id\":1}", "skip rejects invalid unicode escape");
+        throwsBytes(new byte[]{'{','\"','x','\"',':','\"',(byte)0xC3,'(','\"',',','\"','i','d','\"',':','1','}'},
+                "skip rejects malformed UTF-8");
         eq(7L, Json.parse(User.CODEC, "{\"junk\":[-0,0.25,1e+9,2E-3],\"id\":7}").id,
                 "skip valid JSON number grammar without parsing values");
         throwsJson("{\"junk\":01,\"id\":1}", "skip rejects leading zero");
@@ -268,6 +274,17 @@ public final class JsonTest {
             Json.parse(User.CODEC, json);
             fail("expected a JsonException for " + what + ": " + json);
         } catch (JsonException e) {
+            pass();
+        } catch (RuntimeException e) {
+            fail(what + " threw " + e.getClass().getSimpleName() + " instead of JsonException");
+        }
+    }
+
+    private static void throwsBytes(byte[] input, String what) {
+        try {
+            Json.parse(User.CODEC, input);
+            fail("expected a JsonException for " + what);
+        } catch (JsonException expected) {
             pass();
         } catch (RuntimeException e) {
             fail(what + " threw " + e.getClass().getSimpleName() + " instead of JsonException");
