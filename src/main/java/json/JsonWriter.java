@@ -45,6 +45,7 @@ public final class JsonWriter {
         ESCAPE['\t'] = 't';
     }
 
+    private final byte[] initialBuf;
     private byte[] buf;
     private int pos;
     private boolean comma;
@@ -52,7 +53,7 @@ public final class JsonWriter {
 
     public JsonWriter() { this(1024); }
 
-    public JsonWriter(int capacity) { buf = new byte[Math.max(16, capacity)]; }
+    public JsonWriter(int capacity) { initialBuf = new byte[Math.max(16, capacity)]; buf = initialBuf; }
 
     // ---------------------------------------------------------------- output
 
@@ -63,7 +64,7 @@ public final class JsonWriter {
     void resetAndTrim(int maxRetainedCapacity) {
         pos = 0;
         comma = false;
-        if (buf.length > maxRetainedCapacity) buf = new byte[1024];
+        if (buf.length > maxRetainedCapacity) buf = initialBuf;
     }
 
     /** Number of bytes written so far. */

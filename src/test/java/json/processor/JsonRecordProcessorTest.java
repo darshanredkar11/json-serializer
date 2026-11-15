@@ -44,6 +44,7 @@ public final class JsonRecordProcessorTest {
         nullableFieldsRoundTripPresentAndAbsent();
         enumFieldRoundTrips();
         composedListOfNestedRecordsRoundTrips();
+        generatedHashDispatchHandlesCollisionsAndEscapedNames();
         unsupportedFieldTypeFailsCompilationClearly();
 
         System.out.println(checks + " checks, " + failures + " failures");
@@ -226,6 +227,42 @@ public final class JsonRecordProcessorTest {
         String result = compileAndRun(source);
         eq("OK:{\"items\":[{\"sku\":\"A1\",\"qty\":2},{\"sku\":\"B2\",\"qty\":5}]}", result,
                 "List<T> of a nested @JsonRecord type composes listOf() with the nested type's generated codec");
+    }
+
+
+    private static void generatedHashDispatchHandlesCollisionsAndEscapedNames() throws Exception {
+        String source = """
+            package t;
+            import json.JsonRecord;
+            import json.JsonName;
+
+            @JsonRecord
+            record Dispatch(@JsonName("Aa") int first,
+                            @JsonName("BB") int second,
+                            @JsonName("café") int unicode,
+                            int tail) {}
+
+            final class Runner {
+                public static String run() {
+                    Dispatch value = json.Json.parse(DispatchCodec.CODEC,
+                            "{\\"Aa\\":1,\\"BB\\":2,\\"caf\\\\u00e9\\":3,\\"tail\\":4}");
+                    if (value.first() != 1 || value.second() != 2
+                            || value.unicode() != 3 || value.tail() != 4) return "MISMATCH:" + value;
+                    return "OK";
+                }
+            }
+            """;
+        Path outDir = compile(source);
+        String generated = Files.readString(outDir.resolve("t/DispatchCodec.java"));
+        eq(true, generated.contains("switch (keyHash)"), "large generated records use hash dispatch");
+        eq(true, generated.contains("case 2112:"), "colliding ASCII hashes share a switch case");
+        try (URLClassLoader loader = new URLClassLoader(
+                new URL[] {outDir.toUri().toURL()}, JsonRecordProcessorTest.class.getClassLoader())) {
+            Class<?> runner = loader.loadClass("t.Runner");
+            Method run = runner.getMethod("run");
+            run.setAccessible(true);
+            eq("OK", run.invoke(null), "hash collisions and escaped non-ASCII keys decode correctly");
+        }
     }
 
     private static void unsupportedFieldTypeFailsCompilationClearly() throws Exception {
