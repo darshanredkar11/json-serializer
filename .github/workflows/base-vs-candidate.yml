@@ -60,11 +60,11 @@ jobs:
           set -euo pipefail
           mkdir -p ../../results
           for threads in 1 2 4 8; do
-            java -Xms2g -Xmx2g -jar target/benchmarks.jar 'json.bench.GeneratedRecordBenchmark' \
-              -t "$threads" -f 3 -wi 3 -i 3 -w 1s -r 1s -prof gc \
+            java -Xms2g -Xmx2g -jar target/benchmarks.jar 'json.bench.SerializerBenchmark' \
+              -t "$threads" -f 3 -wi 2 -i 3 -w 1s -r 1s -prof gc \
               -rf json -rff "../../results/baseline-generated-${threads}t.json"
-            java -Xms2g -Xmx2g -jar target/benchmarks.jar 'json.bench.CollectionScalingBenchmark' \
-              -t "$threads" -f 3 -wi 3 -i 3 -w 1s -r 1s -prof gc \
+            java -Xms2g -Xmx2g -jar target/benchmarks.jar 'json.bench.CollectionScalingBenchmark.(ownDecodeBytes|jacksonDecodeBytes|gsonDecodeBytes)' \
+              -p tagCount=16,256,1024 -t "$threads" -f 3 -wi 2 -i 3 -w 1s -r 1s -prof gc \
               -rf json -rff "../../results/baseline-collection-${threads}t.json"
           done
 
@@ -96,11 +96,11 @@ jobs:
         run: |
           set -euo pipefail
           for threads in 1 2 4 8; do
-            java -Xms2g -Xmx2g -jar target/benchmarks.jar 'json.bench.GeneratedRecordBenchmark' \
-              -t "$threads" -f 3 -wi 3 -i 3 -w 1s -r 1s -prof gc \
+            java -Xms2g -Xmx2g -jar target/benchmarks.jar 'json.bench.SerializerBenchmark' \
+              -t "$threads" -f 3 -wi 2 -i 3 -w 1s -r 1s -prof gc \
               -rf json -rff "../../results/candidate-generated-${threads}t.json"
-            java -Xms2g -Xmx2g -jar target/benchmarks.jar 'json.bench.CollectionScalingBenchmark' \
-              -t "$threads" -f 3 -wi 3 -i 3 -w 1s -r 1s -prof gc \
+            java -Xms2g -Xmx2g -jar target/benchmarks.jar 'json.bench.CollectionScalingBenchmark.(ownDecodeBytes|jacksonDecodeBytes|gsonDecodeBytes)' \
+              -p tagCount=16,256,1024 -t "$threads" -f 3 -wi 2 -i 3 -w 1s -r 1s -prof gc \
               -rf json -rff "../../results/candidate-collection-${threads}t.json"
           done
 
