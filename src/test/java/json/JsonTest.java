@@ -20,6 +20,7 @@ public final class JsonTest {
         parsing();
         memoryRetention();
         skipping();
+        keyDecodingIsCached();
         errors();
 
         System.out.println(checks + " checks, " + failures + " failures");
@@ -216,6 +217,24 @@ public final class JsonTest {
         throwsJson("{\"junk\":1e,\"id\":1}", "skip rejects empty exponent");
         throwsJson("{\"junk\":+1,\"id\":1}", "skip rejects leading plus");
         throwsJson("{\"junk\":1x,\"id\":1}", "skip rejects invalid number suffix");
+    }
+
+    private static void keyDecodingIsCached() {
+        JsonReader r = new JsonReader(bytes("{\"caf" + '\\' + "u00e9\":1,\"id\":2}"));
+        try {
+            Field cache = field(JsonReader.class, "decodedKey");
+            r.beginObject();
+            eq(true, r.nextKey(), "escaped key available");
+            eq(false, r.keyIs(JsonField.of("other")), "escaped key misses first candidate");
+            Object decoded = cache.get(r);
+            eq(true, r.keyIs(JsonField.of("café")), "escaped key matches later candidate");
+            eq(true, decoded == cache.get(r), "escaped key decoded only once per field");
+            r.skipValue();
+            eq(true, r.nextKey(), "next property available");
+            eq(null, cache.get(r), "next property invalidates decoded-key cache");
+        } catch (ReflectiveOperationException e) {
+            fail("decoded-key cache inspection failed: " + e);
+        }
     }
 
     private static void errors() {
