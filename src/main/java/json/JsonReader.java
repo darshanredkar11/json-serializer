@@ -187,7 +187,7 @@ public final class JsonReader {
     }
     private void skipValue0(){
         byte c=peek();
-        if(c=='"'){readString();return;}
+        if(c=='"'){skipString();ensureValueDelimiter();return;}
         if(c=='{' ){pos++; boolean first=true; while(true){byte x=peek();if(x=='}'){pos++;return;}if(!first){if(x!=',')throw error("expected ',' or '}'");pos++;if(peek()=='}')throw error("trailing comma in object");}if(peek()!='"')throw error("expected a field name");nextKey();skipValue0();first=false;}}
         if(c=='['){pos++;boolean first=true;while(true){byte x=peek();if(x==']'){pos++;return;}if(!first){if(x!=',')throw error("expected ',' or ']'");pos++;if(peek()==']')throw error("trailing comma in array");}skipValue0();first=false;}}
         if(c=='t')expectLiteral("true");
