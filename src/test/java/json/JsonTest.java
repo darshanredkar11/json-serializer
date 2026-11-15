@@ -227,6 +227,7 @@ public final class JsonTest {
             eq(true, r.nextKey(), "escaped key available");
             eq(false, r.keyIs(JsonField.of("other")), "escaped key misses first candidate");
             Object decoded = cache.get(r);
+            eq(true, decoded == r.key(), "key() reuses decoded-key cache");
             eq(true, r.keyIs(JsonField.of("café")), "escaped key matches later candidate");
             eq(true, decoded == cache.get(r), "escaped key decoded only once per field");
             r.skipValue();
