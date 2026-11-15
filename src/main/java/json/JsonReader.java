@@ -5,7 +5,6 @@ import java.util.Arrays;
 
 /** Pull parser over a UTF-8 byte array. Instances are reusable and not thread-safe. */
 public final class JsonReader {
-    private static final double[] POW10 = {1e0,1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8,1e9,1e10,1e11,1e12,1e13,1e14,1e15,1e16,1e17,1e18,1e19,1e20,1e21,1e22};
     private byte[] buf;
     private int pos, end, keyStart, keyEnd;
     private final char[] initialChars = new char[64];
@@ -125,6 +124,61 @@ public final class JsonReader {
         while(p<end){int x=buf[p]&0xff;if(x=='"'){pos=p+1;return new String(buf,start,p-start,StandardCharsets.US_ASCII);}if(x=='\\'||x<0x20||x>=0x80)break;p++;}
         if(p>=end)throw errorAt("unterminated string",p);
         return slowString(start,p);
+    }
+
+    /**
+     * Validates and consumes a JSON string without materialising its contents.
+     * This is used for unknown fields, whose values are intentionally discarded.
+     */
+    private void skipString() {
+        int p = pos + 1; // opening quote has already been consumed by peek()
+        while (p < end) {
+            int x = buf[p++] & 0xff;
+            if (x == '"') {
+                pos = p;
+                return;
+            }
+            if (x < 0x20) throw errorAt("control character in string", p - 1);
+            if (x == '\\') {
+                if (p >= end) throw errorAt("truncated escape", p);
+                int e = buf[p++] & 0xff;
+                switch (e) {
+                    case '"': case '\\': case '/': case 'b': case 'f':
+                    case 'n': case 'r': case 't':
+                        break;
+                    case 'u':
+                        if (p + 4 > end) throw errorAt("truncated \\u escape", p);
+                        hex(buf[p]); hex(buf[p + 1]); hex(buf[p + 2]); hex(buf[p + 3]);
+                        p += 4;
+                        break;
+                    default:
+                        throw errorAt("invalid escape", p - 1);
+                }
+                continue;
+            }
+            if (x < 0x80) continue;
+
+            // Validate UTF-8 exactly as the materialising string path does.
+            if (x < 0xC2) throw errorAt("invalid UTF-8", p - 1);
+            if (x < 0xE0) {
+                if (p >= end) throw errorAt("truncated UTF-8", p);
+                int y = buf[p++] & 0xff;
+                if ((y & 0xC0) != 0x80) throw errorAt("invalid UTF-8", p - 1);
+            } else if (x < 0xF0) {
+                if (p + 1 >= end) throw errorAt("truncated UTF-8", p);
+                int y = buf[p++] & 0xff, z = buf[p++] & 0xff;
+                if ((y & 0xC0) != 0x80 || (z & 0xC0) != 0x80
+                        || (x == 0xE0 && y < 0xA0) || (x == 0xED && y >= 0xA0))
+                    throw errorAt("invalid UTF-8", p - 2);
+            } else {
+                if (p + 2 >= end) throw errorAt("truncated UTF-8", p);
+                int y = buf[p++] & 0xff, z = buf[p++] & 0xff, q = buf[p++] & 0xff;
+                if ((y & 0xC0) != 0x80 || (z & 0xC0) != 0x80 || (q & 0xC0) != 0x80
+                        || x > 0xF4 || (x == 0xF0 && y < 0x90) || (x == 0xF4 && y >= 0x90))
+                    throw errorAt("invalid UTF-8", p - 3);
+            }
+        }
+        throw errorAt("unterminated string", p);
     }
 
     /** Validates and consumes one complete value, including matching object/array delimiters. */
