@@ -89,7 +89,7 @@ public final class JsonReader {
     public String key() {
         int special=indexOfEscapeOrNonAscii(keyStart,keyEnd);
         if(special<0) return new String(buf,keyStart,keyEnd-keyStart,StandardCharsets.US_ASCII);
-        return decodeStringRange(keyStart,keyEnd);
+        return decodedKey();
     }
 
     public boolean hasNextElement() {
