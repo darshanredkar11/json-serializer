@@ -59,14 +59,14 @@ jobs:
             grep -E '<(jackson.version|gson.version|jmh.version)>' benchmarks/pom.xml
           } > benchmarks/results/environment.txt
 
-      - name: Run extended JMH with GC profiler (1, 2, 4, 8 threads)
+      - name: Run JMH with GC profiler (1, 2, 4, 8 threads)
         working-directory: benchmarks
         shell: bash
         run: |
           set -euo pipefail
           for threads in 1 2 4 8; do
             java -Xms2g -Xmx2g -jar target/benchmarks.jar \
-              -t "$threads" -f 3 -wi 5 -i 5 -w 1s -r 1s -prof gc \
+              -t "$threads" -f 3 -wi 3 -i 3 -w 1s -r 1s -prof gc \
               -rf json -rff "results/jmh-${threads}t.json"
           done
 
